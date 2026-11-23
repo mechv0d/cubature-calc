@@ -63,6 +63,7 @@ jobs:
         run: |
           flet build apk --yes --verbose \
             --python-version 3.13 \
+            --arch arm64-v8a \
             --build-number "${{ github.run_number }}"
 
       - name: Upload APK
