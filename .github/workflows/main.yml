@@ -39,7 +39,7 @@ jobs:
         run: ruff check main.py app tests
 
       - name: Run smoke tests against real Flet controls
-        run: pytest -q
+        run: python -m pytest -q
 
   build-apk:
     name: Build APK
