@@ -115,7 +115,10 @@ def main(page: ft.Page):
         total_count = ft.Text("0 шт.", size=17, color=TEXT)
         items_column = ft.Column(spacing=7, scroll=ft.ScrollMode.AUTO, expand=True)
         table_view = ft.Row(spacing=8, expand=True, vertical_alignment=ft.CrossAxisAlignment.STRETCH)
-        summary_view = ft.Column(spacing=12, expand=True, visible=False)
+        summary_view = ft.Column(spacing=12, expand=True)
+        # A single expanding host prevents the hidden tab from reserving half
+        # of the available height on Android.
+        content_host = ft.Container(expand=True, content=table_view)
 
         def refresh_items():
             items_column.controls.clear()
@@ -234,8 +237,7 @@ def main(page: ft.Page):
         def choose_tab(tab_name):
             active_tab["value"] = tab_name
             is_table = tab_name == "table"
-            table_view.visible = is_table
-            summary_view.visible = not is_table
+            content_host.content = table_view if is_table else summary_view
             table_tab.style = ft.ButtonStyle(
                 color="white" if is_table else "#B8D4C8",
                 bgcolor=GREEN,
@@ -327,11 +329,18 @@ def main(page: ft.Page):
             child_aspect_ratio=1.0,
             controls=[
                 ft.FilledButton(
-                    content=str(diameter),
+                    content=ft.Text(
+                        str(diameter),
+                        size=22,
+                        no_wrap=True,
+                        max_lines=1,
+                        text_align=ft.TextAlign.CENTER,
+                    ),
                     height=58,
                     style=ft.ButtonStyle(
                         bgcolor="#E5E6E7",
                         color=TEXT,
+                        padding=ft.Padding.symmetric(horizontal=2, vertical=4),
                         shape=ft.RoundedRectangleBorder(radius=5),
                         elevation=0,
                     ),
@@ -418,8 +427,7 @@ def main(page: ft.Page):
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                         ),
                     ),
-                    ft.Container(content=table_view, expand=True, padding=ft.Padding.symmetric(horizontal=8)),
-                    ft.Container(content=summary_view, expand=True, padding=14),
+                    ft.Container(content=content_host, expand=True, padding=ft.Padding.symmetric(horizontal=8)),
                     ft.Container(
                         padding=ft.Padding.symmetric(horizontal=8, vertical=7),
                         content=ft.Row(
