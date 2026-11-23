@@ -1,4 +1,5 @@
 import flet as ft
+
 from app.storage import init_db, list_calculations, save_calculation
 
 GREEN = "#176B4A"
