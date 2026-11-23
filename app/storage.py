@@ -1,9 +1,14 @@
 import json
+import os
 import sqlite3
 from datetime import datetime
 from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent / "calculations.sqlite3"
+# Flet 0.86 runs packaged apps from a writable app-private working directory.
+# Keep the database out of the read-only APK bundle (where __file__ points).
+DATA_DIR = Path(os.environ.get("FLET_APP_STORAGE_DATA") or Path.cwd())
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / "calculations.sqlite3"
 
 
 def connect():
