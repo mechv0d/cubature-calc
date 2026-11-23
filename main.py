@@ -53,7 +53,7 @@ def main(page: ft.Page):
     def menu_card(title, subtitle, action):
         return ft.Card(
             elevation=0,
-            color="#F0F1EF",
+            bgcolor="#F0F1EF",
             content=ft.ListTile(
                 title=ft.Text(title, size=19, weight=ft.FontWeight.W_600),
                 subtitle=ft.Text(subtitle, size=12),
