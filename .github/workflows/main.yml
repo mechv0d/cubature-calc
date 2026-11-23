@@ -9,27 +9,32 @@ permissions:
   contents: read
 
 jobs:
-  build-apk:
-    name: Build APK
+  build:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
 
-      - name: Build Flet APK
-        id: build
-        uses: flet-dev/flet-build-action@v1
+      - name: Setup Python
+        uses: actions/setup-python@v5
         with:
-          target: apk
-          runner-python-version: "3.14"
-          bundled-python-version: "3.14"
-          build-number: ${{ github.run_number }}
+          python-version: "3.13"
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v7
+      - name: Install Flet
+        run: |
+          python -m pip install --upgrade pip
+          pip install flet==0.86.0
+
+      - name: Build APK
+        run: |
+          flet build apk --yes --verbose \
+            --python-version 3.13 \
+            --build-number ${{ github.run_number }}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
         with:
           name: cubature-calculator-apk
-          path: ${{ steps.build.outputs.archive-path }}
-          archive: false
+          path: build/apk/*.apk
           if-no-files-found: error
-          overwrite: true
