@@ -67,12 +67,12 @@ def test_home_screen_builds_with_installed_flet_api(tmp_path, monkeypatch):
 
     main(page)
 
-    assert page.title == "Р Р°СЃС‡С‘С‚ РєСѓР±Р°С‚СѓСЂС‹"
+    assert page.title == "Расчёт кубатуры"
     assert isinstance(page.appbar, ft.AppBar)
     assert any(
         isinstance(control, ft.ListTile)
         and isinstance(control.title, ft.Text)
-        and control.title.value == "Р“РћРЎРў 2708-75 В· РўР°Р±Р»РёС†Р° 1"
+        and control.title.value == "ГОСТ 2708-75 · Таблица 1"
         for control in all_controls(page)
     )
 
@@ -87,14 +87,14 @@ def test_diameter_tap_adds_log_with_selected_length_and_saves(tmp_path, monkeypa
         for control in all_controls(page)
         if isinstance(control, ft.ListTile)
         and isinstance(control.title, ft.Text)
-        and control.title.value == "Р“РћРЎРў 2708-75 В· РўР°Р±Р»РёС†Р° 1"
+        and control.title.value == "ГОСТ 2708-75 · Таблица 1"
     )
     gost_tile.on_click(None)
 
     length_button = next(
         control
         for control in all_controls(page)
-        if isinstance(control, ft.FilledButton) and "Р”Р›РРќРђ:" in text_of(control)
+        if isinstance(control, ft.FilledButton) and "ДЛИНА:" in text_of(control)
     )
     assert length_button is not None
 
@@ -106,18 +106,18 @@ def test_diameter_tap_adds_log_with_selected_length_and_saves(tmp_path, monkeypa
     diameter_button.on_click(None)
 
     assert any(
-        isinstance(control, ft.Text) and "Г20" in str(control.value)
+        isinstance(control, ft.Text) and "Ø20" in str(control.value)
         for control in all_controls(page)
     )
     assert any(
-        isinstance(control, ft.Text) and "6.0 Рј" in str(control.value)
+        isinstance(control, ft.Text) and "6.0 м" in str(control.value)
         for control in all_controls(page)
     )
 
     save_button = next(
         control
         for control in all_controls(page)
-        if isinstance(control, ft.FilledButton) and "РЎРѕС…СЂР°РЅРёС‚СЊ" in text_of(control)
+        if isinstance(control, ft.FilledButton) and "Сохранить" in text_of(control)
     )
     save_button.on_click(None)
 
