@@ -1,6 +1,5 @@
 import flet as ft
 from app.storage import init_db, save_calculation, list_calculations
-from app.calculators.gost_2708 import calculate_gost_item
 
 GREEN = "#176B4A"
 ORANGE = "#E89A4E"
@@ -59,7 +58,7 @@ def main(page: ft.Page):
                 subtitle=ft.Text(subtitle, size=12),
                 trailing=ft.Icon(ft.Icons.CHEVRON_RIGHT),
                 on_click=action,
-                content_padding=ft.padding.symmetric(horizontal=16, vertical=8),
+                content_padding=ft.Padding.symmetric(horizontal=16, vertical=8),
             )
         )
 

@@ -2,7 +2,7 @@
 name = "cubature-calculator"
 version = "0.1.0"
 description = "Offline timber volume calculator"
-requires-python = ">=3.10"
+requires-python = ">=3.13,<3.14"
 dependencies = ["flet==0.86.0"]
 
 [tool.flet]
@@ -10,3 +10,6 @@ org = "com.example"
 product = "Расчёт кубатуры"
 company = "Local"
 copyright = "Copyright (C) 2026"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
