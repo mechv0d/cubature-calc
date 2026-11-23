@@ -2,7 +2,7 @@
 
 import flet as ft
 
-import app.storage as storage
+from app import storage
 from main import main
 
 
