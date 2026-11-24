@@ -656,7 +656,7 @@ def main(page: ft.Page):
                 "width_cm": {"value": data.get("width_unit", legacy_unit)},
                 "length_m": {"value": data.get("length_unit", legacy_unit)},
             }
-            fields, unit_texts, field_rows = {}, {}, {}
+            fields, unit_texts, field_rows, unit_buttons = {}, {}, {}, {}
             rows = []
             active_field = {"value": focus}
 
@@ -708,12 +708,25 @@ def main(page: ft.Page):
                     return
                 active_field["value"] = key
                 for name, container in field_rows.items():
-                    container.bgcolor = "#FFFFFF"
+                    container.bgcolor = "#DDF2E3" if name == key else "#FFFFFF"
                     container.border = ft.Border.all(
                         2 if name == key else 1,
-                        ORANGE if name == key else "#E1E3E2",
+                        GREEN if name == key else "#E1E3E2",
                     )
+                refresh_unit_buttons()
                 page.update()
+
+            def refresh_unit_buttons():
+                key = active_field["value"]
+                selected_unit = (
+                    unit_modes[key]["value"] if key in unit_modes else None
+                )
+                for unit, button in unit_buttons.items():
+                    button.style = ft.ButtonStyle(
+                        bgcolor=GREEN if unit == selected_unit else "#F0F2F1",
+                        color="white" if unit == selected_unit else "#171A18",
+                        padding=ft.Padding.all(2),
+                    )
 
             for key in field_order:
                 label, default_unit = labels[key]
@@ -734,6 +747,7 @@ def main(page: ft.Page):
                 )
                 unit_texts[key] = unit_control
                 row = ft.Container(
+                    height=68,
                     padding=ft.Padding.symmetric(horizontal=9, vertical=0),
                     border=ft.Border.all(1, "#E1E3E2"),
                     border_radius=9, bgcolor="#FFFFFF",
@@ -741,7 +755,7 @@ def main(page: ft.Page):
                     content=ft.Row(spacing=4, controls=[
                         ft.Text(label, size=13, color="#171A18", width=91),
                         unit_control, field,
-                    ]),
+                    ], vertical_alignment=ft.CrossAxisAlignment.CENTER),
                 )
                 field_rows[key] = row
                 rows.append(row)
@@ -753,6 +767,7 @@ def main(page: ft.Page):
                 unit_modes[key]["value"] = unit
                 unit_texts[key].value = UNIT_NAMES[unit]
                 update_editor_values()
+                refresh_unit_buttons()
                 page.update()
 
             def key_press(value):
@@ -794,18 +809,23 @@ def main(page: ft.Page):
                     return
                 page.update()
 
+            def make_unit_button(unit):
+                button = ft.FilledButton(
+                    unit, expand=True, height=36,
+                    style=ft.ButtonStyle(
+                        bgcolor="#F0F2F1", color="#171A18",
+                        padding=ft.Padding.all(2),
+                    ),
+                    on_click=lambda e, u=unit: change_unit(u),
+                )
+                unit_buttons[unit] = button
+                return button
+
             keypad = ft.Column(
                 spacing=3,
                 controls=[
                     ft.Row(spacing=4, controls=[
-                        ft.FilledButton(
-                            unit, expand=True, height=36,
-                            style=ft.ButtonStyle(
-                                bgcolor="#F0F2F1", color="#171A18",
-                                padding=ft.Padding.all(2),
-                            ),
-                            on_click=lambda e, u=unit: change_unit(u),
-                        )
+                        make_unit_button(unit)
                         for unit in ("MM", "CM", "M")
                     ]),
                     *[
@@ -841,6 +861,7 @@ def main(page: ft.Page):
 
             def confirm_delete():
                 def delete(_):
+                    # Close the confirmation dialog and the editor itself.
                     page.pop_dialog()
                     page.pop_dialog()
                     if index is not None:
