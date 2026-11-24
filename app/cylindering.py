@@ -1,8 +1,8 @@
 import math
 
-import flet as ft
-
 from app.storage import save_calculation
+
+import flet as ft
 
 
 GREEN = "#176B4A"
@@ -263,7 +263,6 @@ def show_cylindering(page: ft.Page, show_home):
                 ))
                 return
 
-            old_length = selected_length["value"]
             selected_length["value"] = value
             # Существующие позиции не меняем: новая длина применяется
             # только к брёвнам, добавленным после её выбора.
