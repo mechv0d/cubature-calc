@@ -412,8 +412,8 @@ def main(page: ft.Page):
         page.update()
 
     def lumber_volume(item):
-        thickness_m = Decimal(str(item["thickness_cm"])) / Decimal("100")
-        width_m = Decimal(str(item["width_cm"])) / Decimal("100")
+        thickness_m = Decimal(str(item["thickness_cm"])) / Decimal(100)
+        width_m = Decimal(str(item["width_cm"])) / Decimal(100)
         length_m = Decimal(str(item["length_m"]))
         return thickness_m * width_m * length_m * int(item["quantity"])
 
@@ -435,11 +435,11 @@ def main(page: ft.Page):
             return f"{value:.{places}f}"
 
         def update_summary():
-            total_volume = sum((lumber_volume(item) for item in lumber_items), Decimal("0"))
+            total_volume = sum((lumber_volume(item) for item in lumber_items), Decimal(0))
             total_count = sum(int(item["quantity"]) for item in lumber_items)
             total_price = sum(
                 (lumber_volume(item) * Decimal(str(item.get("price_per_m3", 0))) for item in lumber_items),
-                Decimal("0"),
+                Decimal(0),
             )
             summary_volume.value = f"{fmt(total_volume)} м³"
             summary_details.value = f"{total_count} шт. · {fmt(total_price, 2)} {price_currency}"
@@ -474,9 +474,9 @@ def main(page: ft.Page):
             for index, item in enumerate(lumber_items):
                 volume = lumber_volume(item)
                 price = volume * Decimal(str(item.get("price_per_m3", 0)))
-                per_cubic = Decimal("1") / (
-                    (Decimal(str(item["thickness_cm"])) / Decimal("100"))
-                    * (Decimal(str(item["width_cm"])) / Decimal("100"))
+                per_cubic = Decimal(1) / (
+                    (Decimal(str(item["thickness_cm"])) / Decimal(100))
+                    * (Decimal(str(item["width_cm"])) / Decimal(100))
                     * Decimal(str(item["length_m"]))
                 )
                 records.controls.append(
@@ -590,9 +590,9 @@ def main(page: ft.Page):
                 value = Decimal(str(data[key]))
                 if key in ("thickness_cm", "width_cm"):
                     if unit_mode["value"] == "MM":
-                        value *= Decimal("10")
+                        value *= Decimal(10)
                     elif unit_mode["value"] == "M":
-                        value /= Decimal("100")
+                        value /= Decimal(100)
                 return format(value.normalize(), "f")
 
             def update_editor_values():
@@ -608,11 +608,11 @@ def main(page: ft.Page):
                 volume_label.value = fmt(volume)
                 price_label.value = fmt(volume * Decimal(str(data.get("price_per_m3", 0))), 2)
                 unit_volume = (
-                    Decimal(str(data["thickness_cm"])) / Decimal("100")
-                    * Decimal(str(data["width_cm"])) / Decimal("100")
+                    Decimal(str(data["thickness_cm"])) / Decimal(100)
+                    * Decimal(str(data["width_cm"])) / Decimal(100)
                     * Decimal(str(data["length_m"]))
                 )
-                per_cubic_label.value = f"В 1 м³: ≈ {int((Decimal('1') / unit_volume).to_integral_value(rounding='ROUND_HALF_UP'))} шт."
+                per_cubic_label.value = f"В 1 м³: ≈ {int((Decimal(1) / unit_volume).to_integral_value(rounding='ROUND_HALF_UP'))} шт."
                 for key, field in fields.items():
                     field.value = shown_value(key)
 
@@ -684,9 +684,9 @@ def main(page: ft.Page):
                         number = int(number)
                     if key in ("thickness_cm", "width_cm"):
                         if unit_mode["value"] == "MM":
-                            number /= Decimal("10")
+                            number /= Decimal(10)
                         elif unit_mode["value"] == "M":
-                            number *= Decimal("100")
+                            number *= Decimal(100)
                     data[key] = number
                     update_editor_values()
                 except (InvalidOperation, ValueError):
