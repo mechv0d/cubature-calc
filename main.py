@@ -474,11 +474,33 @@ def main(page: ft.Page):
             for index, item in enumerate(lumber_items):
                 volume = lumber_volume(item)
                 price = volume * Decimal(str(item.get("price_per_m3", 0)))
-                per_cubic = Decimal(1) / (
+
+                unit_volume = (
                     (Decimal(str(item["thickness_cm"])) / Decimal(100))
                     * (Decimal(str(item["width_cm"])) / Decimal(100))
                     * Decimal(str(item["length_m"]))
                 )
+                per_cubic = Decimal(1) / unit_volume if unit_volume > 0 else None
+
+                unit = item.get("unit", "CM")
+                scale = {
+                    "MM": Decimal(10),
+                    "CM": Decimal(1),
+                    "M": Decimal("0.01"),
+                }[unit]
+
+                thickness = Decimal(str(item["thickness_cm"])) * scale
+                width = Decimal(str(item["width_cm"])) * scale
+
+                length_scale = {
+                    "MM": Decimal(1000),
+                    "CM": Decimal(100),
+                    "M": Decimal(1),
+                }[unit]
+
+                length = Decimal(str(item["length_m"])) * length_scale
+                dimension_unit = {"MM": "мм", "CM": "см", "M": "м"}[unit]
+
                 records.controls.append(
                     ft.Container(
                         padding=ft.Padding.symmetric(horizontal=11, vertical=8),
@@ -494,7 +516,7 @@ def main(page: ft.Page):
                                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                                     controls=[
                                         ft.Text(
-                                            f"{item['thickness_cm']:g} × {item['width_cm']:g} см · {item['length_m']:g} м",
+                                            f"{thickness.normalize():f} × {width.normalize():f} × {length.normalize():f} {dimension_unit}",
                                             size=16,
                                             color=GREEN,
                                             weight=ft.FontWeight.BOLD,
@@ -532,13 +554,23 @@ def main(page: ft.Page):
                                 ),
                                 ft.Row(
                                     controls=[
-                                        ft.Text(f"В 1 м³: ≈ {int(per_cubic.to_integral_value(rounding='ROUND_HALF_UP'))} шт.", size=13, color=TEXT),
+                                        ft.Text(
+                                            f"В 1 м³: ≈ {int(per_cubic.to_integral_value(rounding='ROUND_HALF_UP'))} шт."
+                                            if per_cubic is not None else "В 1 м³: —",
+                                            size=13,
+                                            color=TEXT,
+                                        ),
                                         ft.Container(expand=True),
                                         ft.Column(
                                             spacing=0,
                                             horizontal_alignment=ft.CrossAxisAlignment.END,
                                             controls=[
-                                                ft.Text(f"{fmt(price, 2)} {price_currency}" if item.get("price_per_m3") else "", size=13, color=GREEN, weight=ft.FontWeight.BOLD),
+                                                ft.Text(
+                                                    f"{fmt(price, 2)} {price_currency}" if item.get("price_per_m3") else "",
+                                                    size=13,
+                                                    color=GREEN,
+                                                    weight=ft.FontWeight.BOLD,
+                                                ),
                                                 ft.Text(f"{fmt(volume)} м³", size=20, color=ORANGE, weight=ft.FontWeight.BOLD),
                                             ],
                                         ),
@@ -567,68 +599,104 @@ def main(page: ft.Page):
                     "length_m": 6.0,
                     "quantity": 1,
                     "price_per_m3": 0,
+                    "unit": "CM",
                 }
                 title = "Новый пиломатериал"
 
-            field_order = ["thickness_cm", "width_cm", "length_m", "quantity", "price_per_m3"]
+            field_order = [
+                "thickness_cm",
+                "width_cm",
+                "length_m",
+                "quantity",
+                "price_per_m3",
+            ]
+
             labels = {
                 "thickness_cm": ("Толщина:", "см"),
                 "width_cm": ("Ширина:", "см"),
-                "length_m": ("Длина:", "м"),
+                "length_m": ("Длина:", "см"),
                 "quantity": ("Кол-во:", "шт."),
                 "price_per_m3": ("Цена:", f"{price_currency}/м³"),
             }
+
             active_field = {"value": focus}
-            unit_mode = {"value": "CM"}
+            unit_mode = {"value": data.get("unit", "CM")}
+
             fields = {}
+            unit_texts = {}
             rows = []
+
             volume_label = ft.Text("0.0000", size=25, color=ORANGE, weight=ft.FontWeight.BOLD)
             price_label = ft.Text("0.00", size=19, color="#AAB1B1", weight=ft.FontWeight.BOLD)
             per_cubic_label = ft.Text("В 1 м³: ≈ 0 шт.", size=14, color=TEXT)
 
             def shown_value(key):
                 value = Decimal(str(data[key]))
+
                 if key in ("thickness_cm", "width_cm"):
                     if unit_mode["value"] == "MM":
                         value *= Decimal(10)
                     elif unit_mode["value"] == "M":
                         value /= Decimal(100)
+
+                elif key == "length_m":
+                    if unit_mode["value"] == "MM":
+                        value *= Decimal(1000)
+                    elif unit_mode["value"] == "CM":
+                        value *= Decimal(100)
+
                 return format(value.normalize(), "f")
 
             def update_editor_values():
                 for key, field in fields.items():
                     field.value = shown_value(key) if key in data else ""
+
                 temp = {
                     "thickness_cm": data["thickness_cm"],
                     "width_cm": data["width_cm"],
                     "length_m": data["length_m"],
                     "quantity": data["quantity"],
                 }
+
                 volume = lumber_volume(temp)
                 volume_label.value = fmt(volume)
-                price_label.value = fmt(volume * Decimal(str(data.get("price_per_m3", 0))), 2)
+                price_label.value = fmt(
+                    volume * Decimal(str(data.get("price_per_m3", 0))),
+                    2,
+                )
+
                 unit_volume = (
                     Decimal(str(data["thickness_cm"])) / Decimal(100)
                     * Decimal(str(data["width_cm"])) / Decimal(100)
                     * Decimal(str(data["length_m"]))
                 )
-                per_cubic_label.value = f"В 1 м³: ≈ {int((Decimal(1) / unit_volume).to_integral_value(rounding='ROUND_HALF_UP'))} шт."
+
+                per_cubic_label.value = (
+                    f"В 1 м³: ≈ {int((Decimal(1) / unit_volume).to_integral_value(rounding='ROUND_HALF_UP'))} шт."
+                    if unit_volume > 0 else "В 1 м³: —"
+                )
+
                 for key, field in fields.items():
                     field.value = shown_value(key)
 
             def select_field(key):
                 active_field["value"] = key
+
                 for name, container in field_rows.items():
-                    container.bgcolor = GREEN if name == "price_per_m3" else "#FFFFFF"
+                    container.bgcolor = "#FFFFFF"
+
                     if name == key:
                         container.border = ft.Border.all(2, ORANGE)
                     else:
                         container.border = ft.Border.all(1, "#E1E3E2")
+
                 page.update()
 
             field_rows = {}
+
             for key in field_order:
                 label, unit = labels[key]
+
                 field = ft.TextField(
                     value=shown_value(key),
                     read_only=True,
@@ -638,59 +706,98 @@ def main(page: ft.Page):
                     expand=True,
                     on_focus=lambda e, k=key: select_field(k),
                 )
+
                 fields[key] = field
+
+                unit_control = ft.Text(
+                    unit,
+                    size=14,
+                    color="#171A18",
+                    width=68,
+                )
+                unit_texts[key] = unit_control
+
                 row = ft.Container(
                     padding=ft.Padding.symmetric(horizontal=12, vertical=2),
                     border=ft.Border.all(1, "#E1E3E2"),
                     border_radius=12,
-                    bgcolor=GREEN if key == "price_per_m3" else "#FFFFFF",
+                    bgcolor="#FFFFFF",
                     on_click=lambda e, k=key: select_field(k),
                     content=ft.Row(
                         spacing=6,
                         controls=[
-                            ft.Text(label, size=15, color="white" if key == "price_per_m3" else "#171A18", width=112),
-                            ft.Text(unit, size=14, color="white" if key == "price_per_m3" else "#171A18", width=68),
+                            ft.Text(label, size=15, color="#171A18", width=112),
+                            unit_control,
                             field,
                         ],
                     ),
                 )
+
                 field_rows[key] = row
                 rows.append(row)
 
             def change_unit(unit):
                 unit_mode["value"] = unit
+
+                unit_label = {
+                    "MM": "мм",
+                    "CM": "см",
+                    "M": "м",
+                }[unit]
+
+                for key in ("thickness_cm", "width_cm", "length_m"):
+                    unit_texts[key].value = unit_label
+
                 update_editor_values()
                 page.update()
 
             def key_press(value):
                 key = active_field["value"]
                 current = shown_value(key)
+
                 if value == "⌫":
                     current = current[:-1]
+
                 elif value == ".":
                     if key == "quantity":
                         return
+
                     if "." not in current:
                         current = (current or "0") + "."
+
                 else:
                     current = ("" if current == "0" else current) + value
+
                 if current in ("", "."):
                     current = "0" if current == "" else "0."
+
                 try:
                     number = Decimal(current)
+
                     if number < 0:
                         return
+
                     if key == "quantity":
                         number = int(number)
+
                     if key in ("thickness_cm", "width_cm"):
                         if unit_mode["value"] == "MM":
                             number /= Decimal(10)
                         elif unit_mode["value"] == "M":
                             number *= Decimal(100)
+
+                    elif key == "length_m":
+                        if unit_mode["value"] == "MM":
+                            number /= Decimal(1000)
+                        elif unit_mode["value"] == "CM":
+                            number /= Decimal(100)
+
                     data[key] = number
                     update_editor_values()
+
                 except (InvalidOperation, ValueError):
                     return
+
                 page.update()
 
             keypad = ft.Column(
@@ -703,7 +810,10 @@ def main(page: ft.Page):
                                 unit,
                                 expand=True,
                                 height=44,
-                                style=ft.ButtonStyle(bgcolor="#F0F2F1", color="#171A18"),
+                                style=ft.ButtonStyle(
+                                    bgcolor="#F0F2F1",
+                                    color="#171A18",
+                                ),
                                 on_click=lambda e, u=unit: change_unit(u),
                             )
                             for unit in ("MM", "CM", "M")
@@ -717,37 +827,61 @@ def main(page: ft.Page):
                                     value,
                                     expand=True,
                                     height=48,
-                                    style=ft.ButtonStyle(bgcolor="#F0F2F1", color=TEXT, text_style=ft.TextStyle(size=23)),
+                                    style=ft.ButtonStyle(
+                                        bgcolor="#F0F2F1",
+                                        color=TEXT,
+                                        text_style=ft.TextStyle(size=23),
+                                    ),
                                     on_click=lambda e, v=value: key_press(v),
                                 )
                                 for value in trio
                             ],
                         )
-                        for trio in (("1", "2", "3"), ("4", "5", "6"), ("7", "8", "9"), ("⌫", "0", "."))
+                        for trio in (
+                            ("1", "2", "3"),
+                            ("4", "5", "6"),
+                            ("7", "8", "9"),
+                            ("⌫", "0", "."),
+                        )
                     ],
                 ],
             )
 
             def move_field(direction):
                 current = field_order.index(active_field["value"])
-                select_field(field_order[max(0, min(len(field_order) - 1, current + direction))])
+                select_field(
+                    field_order[
+                        max(0, min(len(field_order) - 1, current + direction))
+                    ]
+                )
 
             def commit(_):
                 try:
                     for key in ("thickness_cm", "width_cm", "length_m"):
                         if Decimal(str(data[key])) <= 0:
                             raise ValueError
+
                     if int(data["quantity"]) < 1:
                         raise ValueError
+
                     if Decimal(str(data.get("price_per_m3", 0))) < 0:
                         raise ValueError
+
+                    data["unit"] = unit_mode["value"]
+
                 except (ValueError, InvalidOperation, KeyError):
-                    page.show_dialog(ft.SnackBar(content=ft.Text("Проверьте размеры, количество и цену.")))
+                    page.show_dialog(
+                        ft.SnackBar(
+                            content=ft.Text("Проверьте размеры, количество и цену.")
+                        )
+                    )
                     return
+
                 if index is None:
                     lumber_items.append(dict(data))
                 else:
                     lumber_items[index] = dict(data)
+
                 page.pop_dialog()
                 refresh_records()
 
@@ -757,17 +891,43 @@ def main(page: ft.Page):
                 spacing=5,
                 controls=[
                     ft.Row(
-                        controls=[ft.Text(title, size=16, color=TEXT, expand=True), ft.IconButton(ft.Icons.EDIT, icon_color=TEXT), ft.IconButton(ft.Icons.DELETE_OUTLINE, icon_color=TEXT, on_click=lambda _: clear_editor())],
+                        controls=[
+                            ft.Text(title, size=16, color=TEXT, expand=True),
+                            ft.IconButton(ft.Icons.EDIT, icon_color=TEXT),
+                            ft.IconButton(
+                                ft.Icons.DELETE_OUTLINE,
+                                icon_color=TEXT,
+                                on_click=lambda _: clear_editor(),
+                            ),
+                        ],
                     ),
-                    ft.Row(controls=[volume_label, price_label], spacing=12),
+                    ft.Row(
+                        controls=[volume_label, price_label],
+                        spacing=12,
+                    ),
                     *rows,
                     per_cubic_label,
                     keypad,
                     ft.Row(
                         controls=[
-                            ft.IconButton(ft.Icons.KEYBOARD_ARROW_UP, on_click=lambda _: move_field(-1)),
-                            ft.FilledButton("OK", expand=True, height=54, style=ft.ButtonStyle(bgcolor="#E77C3B", color="white"), on_click=commit),
-                            ft.IconButton(ft.Icons.KEYBOARD_ARROW_DOWN, on_click=lambda _: move_field(1)),
+                            ft.IconButton(
+                                ft.Icons.KEYBOARD_ARROW_UP,
+                                on_click=lambda _: move_field(-1),
+                            ),
+                            ft.FilledButton(
+                                "OK",
+                                expand=True,
+                                height=54,
+                                style=ft.ButtonStyle(
+                                    bgcolor="#E77C3B",
+                                    color="white",
+                                ),
+                                on_click=commit,
+                            ),
+                            ft.IconButton(
+                                ft.Icons.KEYBOARD_ARROW_DOWN,
+                                on_click=lambda _: move_field(1),
+                            ),
                         ],
                     ),
                 ],
@@ -788,7 +948,18 @@ def main(page: ft.Page):
                 shape=ft.RoundedRectangleBorder(radius=24),
                 inset_padding=ft.Padding.symmetric(horizontal=12, vertical=12),
             )
+
             page.show_dialog(dialog)
+
+            initial_unit_label = {
+                "MM": "мм",
+                "CM": "см",
+                "M": "м",
+            }[unit_mode["value"]]
+
+            for key in ("thickness_cm", "width_cm", "length_m"):
+                unit_texts[key].value = initial_unit_label
+
             select_field(focus)
             update_editor_values()
 
@@ -803,7 +974,10 @@ def main(page: ft.Page):
                     ft.Container(
                         padding=ft.Padding.symmetric(horizontal=18, vertical=10),
                         bgcolor="#FFFFFF",
-                        content=ft.Column(spacing=0, controls=[summary_volume, summary_details]),
+                        content=ft.Column(
+                            spacing=0,
+                            controls=[summary_volume, summary_details],
+                        ),
                     ),
                     ft.Container(
                         expand=True,
@@ -818,11 +992,23 @@ def main(page: ft.Page):
                         content=ft.FilledButton(
                             content=ft.Row(
                                 alignment=ft.MainAxisAlignment.CENTER,
-                                controls=[ft.Icon(ft.Icons.ADD, color="white"), ft.Text("Добавить пиломатериал", color="white", weight=ft.FontWeight.BOLD, size=17)],
+                                controls=[
+                                    ft.Icon(ft.Icons.ADD, color="white"),
+                                    ft.Text(
+                                        "Добавить пиломатериал",
+                                        color="white",
+                                        weight=ft.FontWeight.BOLD,
+                                        size=17,
+                                    ),
+                                ],
                             ),
                             expand=True,
                             height=62,
-                            style=ft.ButtonStyle(bgcolor="#E77C3B", color="white", shape=ft.RoundedRectangleBorder(radius=18)),
+                            style=ft.ButtonStyle(
+                                bgcolor="#E77C3B",
+                                color="white",
+                                shape=ft.RoundedRectangleBorder(radius=18),
+                            ),
                             on_click=add_lumber,
                         ),
                     ),
@@ -835,15 +1021,21 @@ def main(page: ft.Page):
     def show_history():
         page.controls.clear()
         page.appbar = ft.AppBar(
-            leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda _: show_home()),
+            leading=ft.IconButton(
+                ft.Icons.ARROW_BACK,
+                on_click=lambda _: show_home(),
+            ),
             title=ft.Text("История расчётов"),
             bgcolor=GREEN,
             color="white",
         )
+
         rows = list_calculations()
         controls = []
+
         if not rows:
             controls.append(ft.Text("Сохранённых расчётов пока нет."))
+
         for row in rows:
             controls.append(
                 ft.ListTile(
@@ -852,7 +1044,13 @@ def main(page: ft.Page):
                     trailing=ft.Text(f"{row['items_count']} поз."),
                 )
             )
-        page.add(ft.Container(padding=18, content=ft.Column(controls, spacing=8)))
+
+        page.add(
+            ft.Container(
+                padding=18,
+                content=ft.Column(controls, spacing=8),
+            )
+        )
         page.update()
 
     show_home()
