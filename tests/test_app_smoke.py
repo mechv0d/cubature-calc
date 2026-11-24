@@ -77,7 +77,7 @@ def test_home_screen_builds_with_installed_flet_api(tmp_path, monkeypatch):
     )
 
 
-def test_diameter_tap_adds_log_with_selected_length_and_saves(tmp_path, monkeypatch):
+def test_diameter_tap_adds_log_and_save_button_is_disabled(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "DB_PATH", tmp_path / "test.sqlite3")
     page = FakePage()
     main(page)
@@ -119,9 +119,7 @@ def test_diameter_tap_adds_log_with_selected_length_and_saves(tmp_path, monkeypa
         for control in all_controls(page)
         if isinstance(control, ft.FilledButton) and "Сохранить" in text_of(control)
     )
-    save_button.on_click(None)
 
-    calculations = storage.list_calculations()
-    assert len(calculations) == 1
-    assert calculations[0]["items_count"] == 1
-    assert (tmp_path / "test.sqlite3").exists()
+    # Saving is intentionally unavailable until persistence is implemented.
+    assert save_button.disabled is True
+    assert storage.list_calculations() == []
