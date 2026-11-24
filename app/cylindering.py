@@ -114,6 +114,7 @@ def show_cylindering(page: ft.Page, show_home):
 
     def refresh_records():
         records.controls.clear()
+
         if not items:
             records.controls.append(
                 ft.Container(
@@ -130,6 +131,7 @@ def show_cylindering(page: ft.Page, show_home):
                 item["diameter"], item["length"], item["quantity"]
             )
             is_selected = item["diameter"] == selected_diameter["value"]
+
             records.controls.append(
                 ft.Container(
                     padding=10,
@@ -139,45 +141,55 @@ def show_cylindering(page: ft.Page, show_home):
                         2 if is_selected else 0,
                         GREEN if is_selected else PANEL,
                     ),
-                    content=ft.Row(
-                        spacing=8,
+                    content=ft.Column(
+                        spacing=5,
                         controls=[
-                            ft.Container(
-                                width=66,
-                                height=64,
-                                border_radius=10,
-                                bgcolor="#F5F6F6",
-                                alignment=ft.Alignment.CENTER,
-                                content=ft.Text(
-                                    f'Ø{item["diameter"]}',
-                                    size=19,
-                                    weight=ft.FontWeight.W_600,
-                                    color=TEXT,
-                                ),
-                            ),
-                            ft.Column(
-                                spacing=3,
-                                expand=True,
+                            ft.Row(
+                                spacing=8,
+                                vertical_alignment=ft.CrossAxisAlignment.CENTER,
                                 controls=[
-                                    ft.Text(
-                                        f'{item["length"]:g} м · '
-                                        f'{item["quantity"]} шт. · #{index + 1}',
-                                        size=13,
-                                        color=TEXT,
+                                    ft.Container(
+                                        width=66,
+                                        height=48,
+                                        border_radius=10,
+                                        bgcolor="#F5F6F6",
+                                        alignment=ft.Alignment.CENTER,
+                                        content=ft.Text(
+                                            f'Ø{item["diameter"]}',
+                                            size=19,
+                                            weight=ft.FontWeight.W_600,
+                                            color=TEXT,
+                                        ),
                                     ),
-                                    ft.Text(
-                                        format_volume(volume),
-                                        size=21,
-                                        color=ORANGE,
-                                        weight=ft.FontWeight.BOLD,
+                                    ft.Column(
+                                        spacing=2,
+                                        expand=True,
+                                        controls=[
+                                            ft.Text(
+                                                f'{item["length"]:g} м',
+                                                size=15,
+                                                color=TEXT,
+                                            ),
+                                            ft.Text(
+                                                f'{item["quantity"]} шт. · #{index + 1}',
+                                                size=13,
+                                                color=TEXT,
+                                            ),
+                                        ],
+                                    ),
+                                    ft.IconButton(
+                                        ft.Icons.DELETE_OUTLINE,
+                                        icon_color=TEXT,
+                                        tooltip="Удалить позицию",
+                                        on_click=lambda e, i=index: delete_item(i),
                                     ),
                                 ],
                             ),
-                            ft.IconButton(
-                                ft.Icons.DELETE_OUTLINE,
-                                icon_color=TEXT,
-                                tooltip="Удалить позицию",
-                                on_click=lambda e, i=index: delete_item(i),
+                            ft.Text(
+                                f"{format_volume(volume)} м³",
+                                size=21,
+                                color=ORANGE,
+                                weight=ft.FontWeight.BOLD,
                             ),
                         ],
                     ),
@@ -185,8 +197,10 @@ def show_cylindering(page: ft.Page, show_home):
             )
 
         update_totals()
+
         if active_tab["value"] == "summary":
             refresh_summary()
+
         refresh_diameter_buttons()
         page.update()
 
@@ -228,7 +242,7 @@ def show_cylindering(page: ft.Page, show_home):
     def choose_tab(tab):
         active_tab["value"] = tab
         is_table = tab == "table"
-        content_host.content = records if is_table else summary
+        content_host.content = table_view if is_table else summary
         table_tab.style = ft.ButtonStyle(
             bgcolor=GREEN,
             color="white" if is_table else "#B8D4C8",
