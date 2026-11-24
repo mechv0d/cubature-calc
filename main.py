@@ -2,6 +2,8 @@ from decimal import Decimal, InvalidOperation
 
 import flet as ft
 
+from app.cylindering import show_cylindering
+
 from app.storage import init_db, list_calculations
 
 GREEN = "#176B4A"
@@ -78,8 +80,12 @@ def main(page: ft.Page):
                                   lambda _: show_placeholder("ОСТ 13-232-87")),
                         menu_card("ISO 4480-83", "В разработке",
                                   lambda _: show_placeholder("ISO 4480-83")),
-                        menu_card("Оцилиндровка", "В разработке",
-                                  lambda _: show_placeholder("Оцилиндровка")),
+
+menu_card(
+    "Оцилиндровка",
+    "Расчёт объёма оцилиндрованных брёвен",
+    lambda _: show_cylindering(page, show_home),
+),
                         ft.OutlinedButton(
                             "История расчётов",
                             icon=ft.Icons.HISTORY,
