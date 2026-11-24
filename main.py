@@ -195,7 +195,7 @@ def main(page: ft.Page):
                                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                                     controls=[
                                         ft.Text(
-                                            f"{item['length']:g} м",
+                                            f"{item['length']:.1f} м",
                                             size=13,
                                             color=TEXT,
                                             no_wrap=True,
