@@ -4,7 +4,6 @@ import flet as ft
 
 from app.storage import save_calculation
 
-
 GREEN = "#176B4A"
 ORANGE = "#E89A4E"
 BG = "#F7F8F7"
