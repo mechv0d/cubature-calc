@@ -370,7 +370,7 @@ def show_cylindering(page: ft.Page, show_home):
             ft.dropdown.Option("0.00000"),
             ft.dropdown.Option("0.000000"),
         ],
-        on_change=change_rounding,
+        on_select=change_rounding,
     )
 
     table_view = ft.Row(
