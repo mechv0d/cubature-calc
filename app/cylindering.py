@@ -1,8 +1,8 @@
 import math
 
-from app.storage import save_calculation
-
 import flet as ft
+
+from app.storage import save_calculation
 
 
 GREEN = "#176B4A"
