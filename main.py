@@ -1,4 +1,4 @@
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import flet as ft
 
@@ -12,6 +12,7 @@ PANEL = "#E8E9EA"
 TEXT = "#62666A"
 DIAMETERS = list(range(4, 101))
 UNIT_NAMES = {"MM": "мм", "CM": "см", "M": "м"}
+ROUNDING_OPTIONS = ("0.0", "0.00", "0.000", "0.0000", "0.00000", "0.000000")
 
 
 def main(page: ft.Page):
@@ -419,6 +420,23 @@ menu_card(
             return lumber_volume(item).quantize(
                 quantum, rounding=ROUND_HALF_UP
             )
+
+        def change_rounding(e):
+            value = e.control.value
+            if not value:
+                return
+            rounding_digits["value"] = len(value.split(".", 1)[1])
+            refresh_records()
+
+        rounding_selector = ft.Dropdown(
+            label="Округление",
+            value="0.0000",
+            width=140,
+            dense=True,
+            text_size=15,
+            options=[ft.dropdown.Option(option) for option in ROUNDING_OPTIONS],
+            on_select=change_rounding,
+        )
 
         def update_summary():
             # Каждая позиция сначала округляется, затем значения складываются.
@@ -957,9 +975,18 @@ menu_card(
                 ft.Container(
                     padding=ft.Padding.symmetric(horizontal=18, vertical=10),
                     bgcolor="#FFFFFF",
-                    content=ft.Column(spacing=0, controls=[
-                        summary_volume, summary_details,
-                    ]),
+                    content=ft.Row(
+                        vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                        spacing=10,
+                        controls=[
+                            ft.Column(
+                                spacing=0,
+                                expand=True,
+                                controls=[summary_volume, summary_details],
+                            ),
+                            rounding_selector,
+                        ],
+                    ),
                 ),
                 ft.Container(
                     expand=True,

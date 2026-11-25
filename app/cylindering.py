@@ -1,4 +1,5 @@
 import math
+from decimal import ROUND_HALF_UP, Decimal
 
 import flet as ft
 
@@ -11,12 +12,19 @@ PANEL = "#E8E9EA"
 TEXT = "#62666A"
 
 DIAMETERS = list(range(4, 101))
+ROUNDING_OPTIONS = ("0.0", "0.00", "0.000", "0.0000", "0.00000", "0.000000")
 
 
 def cylinder_volume(diameter_cm: int, length_m: float, quantity: int = 1) -> float:
     """Объём оцилиндрованного бревна в м³ по формуле геометрического цилиндра."""
     radius_m = diameter_cm / 200
     return math.pi * radius_m**2 * length_m * quantity
+
+
+def round_volume(value, digits: int) -> Decimal:
+    """Округлить объём до указанного количества знаков (половина — вверх)."""
+    quantum = Decimal(1).scaleb(-digits)
+    return Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP)
 
 
 def show_cylindering(page: ft.Page, show_home):
@@ -48,12 +56,12 @@ def show_cylindering(page: ft.Page, show_home):
     content_host = ft.Container(expand=True)
     diameter_buttons = {}
 
-    def format_volume(value: float) -> str:
+    def format_volume(value) -> str:
         return f"{value:.{rounding_digits['value']}f}"
 
-    def item_volume(item) -> float:
+    def item_volume(item) -> Decimal:
         """Объём позиции, округлённый до выбранной точности."""
-        return round(
+        return round_volume(
             cylinder_volume(item["diameter"], item["length"], item["quantity"]),
             rounding_digits["value"],
         )
@@ -84,7 +92,9 @@ def show_cylindering(page: ft.Page, show_home):
         grouped = {}
         for item in items:
             diameter = item["diameter"]
-            grouped.setdefault(diameter, {"quantity": 0, "volume": 0.0})
+            grouped.setdefault(
+                diameter, {"quantity": 0, "volume": Decimal(0)}
+            )
             grouped[diameter]["quantity"] += item["quantity"]
             grouped[diameter]["volume"] += item_volume(item)
 
@@ -332,12 +342,7 @@ def show_cylindering(page: ft.Page, show_home):
                 "diameter_cm": item["diameter"],
                 "length_m": item["length"],
                 "quantity": item["quantity"],
-                "volume_m3": round(
-                    cylinder_volume(
-                        item["diameter"], item["length"], item["quantity"]
-                    ),
-                    rounding_digits["value"],
-                ),
+                "volume_m3": float(item_volume(item)),
             }
             for item in items
         ])
@@ -377,14 +382,7 @@ def show_cylindering(page: ft.Page, show_home):
         width=150,
         dense=True,
         text_size=15,
-        options=[
-            ft.dropdown.Option("0.0"),
-            ft.dropdown.Option("0.00"),
-            ft.dropdown.Option("0.000"),
-            ft.dropdown.Option("0.0000"),
-            ft.dropdown.Option("0.00000"),
-            ft.dropdown.Option("0.000000"),
-        ],
+        options=[ft.dropdown.Option(option) for option in ROUNDING_OPTIONS],
         on_select=change_rounding,
     )
 
