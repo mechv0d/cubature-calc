@@ -737,7 +737,7 @@ menu_card(
                 label, default_unit = labels[key]
                 field = ft.TextField(
                     value=shown_value(key), read_only=True,
-                    border=ft.InputBorder.NONE, text_size=15,
+                    border=ft.InputBorder.NONE, text_size=16,
                     text_align=ft.TextAlign.START, expand=True,
                     bgcolor="#FFFFFF",
                     on_focus=lambda e, k=key: select_field(k),
@@ -748,12 +748,12 @@ menu_card(
                     if key in unit_modes else default_unit
                 )
                 unit_control = ft.Text(
-                    unit_label, size=13, color="#171A18", width=38
+                    unit_label, size=14, color="#171A18", width=38
                 )
                 unit_texts[key] = unit_control
                 row = ft.Container(
-                    height=68,
-                    padding=ft.Padding.symmetric(horizontal=9, vertical=0),
+                    height=54,
+                    padding=ft.Padding.symmetric(horizontal=4, vertical=0),
                     border=ft.Border.all(1, "#E1E3E2"),
                     border_radius=9, bgcolor="#FFFFFF",
                     on_click=lambda e, k=key: select_field(k),
