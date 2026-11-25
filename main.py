@@ -2,6 +2,7 @@ from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import flet as ft
 
+from app.calculators.gost_2708 import calculate_gost_item, load_gost_table
 from app.cylindering import show_cylindering
 from app.storage import init_db, list_calculations
 
@@ -13,6 +14,7 @@ TEXT = "#62666A"
 DIAMETERS = list(range(4, 101))
 UNIT_NAMES = {"MM": "мм", "CM": "см", "M": "м"}
 ROUNDING_OPTIONS = ("0.0", "0.00", "0.000", "0.0000", "0.00000", "0.000000")
+GOST_TABLE = load_gost_table()
 
 
 def main(page: ft.Page):
@@ -124,7 +126,8 @@ menu_card(
             center_title=True,
         )
 
-        total_volume = ft.Text("—", size=25, color=ORANGE, weight=ft.FontWeight.BOLD)
+        total_volume = ft.Text("0.0000 м³", size=25, color=ORANGE,
+                               weight=ft.FontWeight.BOLD)
         total_count = ft.Text("0 шт.", size=17, color=TEXT)
         items_column = ft.Column(spacing=7, scroll=ft.ScrollMode.AUTO, expand=True)
         table_view = ft.Row(spacing=8, expand=True,
@@ -132,27 +135,47 @@ menu_card(
         summary_view = ft.Column(spacing=12, expand=True)
         content_host = ft.Container(expand=True, content=table_view)
 
+        def format_gost_volume(value):
+            quantum = Decimal("0.0001")
+            return f"{value.quantize(quantum, rounding=ROUND_HALF_UP):.4f}"
+
+        def format_length(value):
+            text = f"{value:g}"
+            return f"{text}.0" if "." not in text else text
+
         def refresh_summary():
             summary_view.controls.clear()
+            total = sum(
+                (item["volume"] for item in current_items), Decimal(0)
+            )
+            count = sum(item["quantity"] for item in current_items)
             summary_view.controls.extend([
                 ft.Text("Итоги расчёта", size=22, weight=ft.FontWeight.BOLD),
                 ft.Row(controls=[
                     ft.Text("Количество брёвен", size=16),
                     ft.Container(expand=True),
-                    ft.Text(total_count.value, size=17, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"{count} шт.", size=17,
+                            weight=ft.FontWeight.BOLD),
                 ]),
                 ft.Row(controls=[
                     ft.Text("Общая кубатура", size=16),
                     ft.Container(expand=True),
-                    ft.Text("Не рассчитана", size=17, color=ORANGE,
-                            weight=ft.FontWeight.BOLD),
+                    ft.Text(f"{format_gost_volume(total)} м³", size=17,
+                            color=ORANGE, weight=ft.FontWeight.BOLD),
                 ]),
-                ft.Text(
-                    "Для расчёта объёма необходимы проверенные значения "
-                    "таблицы ГОСТ 2708-75.",
-                    size=13, color=TEXT,
-                ),
             ])
+            for item in current_items:
+                summary_view.controls.append(ft.Row(controls=[
+                    ft.Text(
+                        f"Ø{item['diameter']} · "
+                        f"{format_length(item['length'])} м",
+                        size=14, color=TEXT,
+                    ),
+                    ft.Container(expand=True),
+                    ft.Text(f"{item['quantity']} шт.", size=14, color=TEXT),
+                    ft.Text(f"{item['display_volume']} м³", size=14,
+                            color=ORANGE, weight=ft.FontWeight.BOLD),
+                ]))
 
         def refresh_items():
             items_column.controls.clear()
@@ -187,8 +210,10 @@ menu_card(
                                     spacing=5, expand=True,
                                     vertical_alignment=ft.CrossAxisAlignment.CENTER,
                                     controls=[
-                                        ft.Text(f"{item['length']:.1f} м", size=13,
-                                                color=TEXT, no_wrap=True),
+                                        ft.Text(
+                                            f"{format_length(item['length'])} м",
+                                            size=13, color=TEXT, no_wrap=True,
+                                        ),
                                         ft.Text("·", size=13, color=TEXT),
                                         ft.Text(f"{item['quantity']} шт.", size=13,
                                                 color=TEXT, no_wrap=True),
@@ -198,8 +223,10 @@ menu_card(
                                     spacing=0,
                                     horizontal_alignment=ft.CrossAxisAlignment.END,
                                     controls=[
-                                        ft.Text("—", size=20, color=ORANGE,
-                                                weight=ft.FontWeight.BOLD),
+                                        ft.Text(f"{item['display_volume']} м³",
+                                                size=16, color=ORANGE,
+                                                weight=ft.FontWeight.BOLD,
+                                                no_wrap=True),
                                         ft.IconButton(
                                             ft.Icons.DELETE_OUTLINE,
                                             icon_color=TEXT, icon_size=20,
@@ -213,7 +240,10 @@ menu_card(
                     )
                 )
             total_count.value = f"{sum(x['quantity'] for x in current_items)} шт."
-            total_volume.value = "—"
+            total = sum(
+                (item["volume"] for item in current_items), Decimal(0)
+            )
+            total_volume.value = f"{format_gost_volume(total)} м³"
             if active_tab["value"] == "summary":
                 refresh_summary()
             page.update()
@@ -223,14 +253,39 @@ menu_card(
                 current_items.pop(index)
                 refresh_items()
 
+        def show_missing_table_value(diameter, length):
+            def close_dialog(_):
+                page.pop_dialog()
+                page.update()
+
+            page.show_dialog(ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Нет значения в таблице"),
+                content=ft.Text(
+                    f"Для диаметра {diameter} см и длины {length:g} м "
+                    "нет значения в таблице ГОСТ 2708-75. "
+                    "Выберите другую длину или диаметр."
+                ),
+                actions=[
+                    ft.FilledButton("Закрыть", on_click=close_dialog),
+                ],
+            ))
+
         def add_diameter(diameter):
+            length = Decimal(str(selected_length["value"]))
+            try:
+                volume = calculate_gost_item(
+                    diameter, length, 1, GOST_TABLE
+                )
+            except ValueError:
+                show_missing_table_value(diameter, selected_length["value"])
+                return
             current_items.append({
                 "diameter": diameter,
                 "length": selected_length["value"],
                 "quantity": 1,
-                "volume": None,
-                "display_volume": "—",
-                "status": "Ожидает проверенных данных таблицы ГОСТ",
+                "volume": volume,
+                "display_volume": format_gost_volume(volume),
             })
             refresh_items()
 

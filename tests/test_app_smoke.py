@@ -41,6 +41,8 @@ def walk(control):
         child = getattr(control, name, None)
         if child is not None and not isinstance(child, str):
             yield from walk(child)
+    for child in getattr(control, "actions", []) or []:
+        yield from walk(child)
 
 
 def all_controls(page):
@@ -123,3 +125,68 @@ def test_diameter_tap_adds_log_and_save_button_is_disabled(tmp_path, monkeypatch
     # Saving is intentionally unavailable until persistence is implemented.
     assert save_button.disabled is True
     assert storage.list_calculations() == []
+
+
+def open_gost_screen(page):
+    gost_tile = next(
+        control
+        for control in all_controls(page)
+        if isinstance(control, ft.ListTile)
+        and isinstance(control.title, ft.Text)
+        and control.title.value == "ГОСТ 2708-75 · Таблица 1"
+    )
+    gost_tile.on_click(None)
+
+
+def find_button(page, text):
+    return next(
+        control
+        for control in all_controls(page)
+        if isinstance(control, ft.FilledButton) and text_of(control) == text
+    )
+
+
+def test_gost_volume_comes_from_table(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "DB_PATH", tmp_path / "test.sqlite3")
+    page = FakePage()
+    main(page)
+    open_gost_screen(page)
+
+    find_button(page, "20").on_click(None)
+
+    assert any(
+        isinstance(control, ft.Text) and control.value == "0.2300 м³"
+        for control in all_controls(page)
+    )
+
+
+def test_gost_missing_value_shows_close_dialog(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "DB_PATH", tmp_path / "test.sqlite3")
+    page = FakePage()
+    main(page)
+    open_gost_screen(page)
+
+    find_button(page, "ДЛИНА: 6").on_click(None)
+    length_dialog = page.dialogs[-1]
+    length_input = next(
+        control
+        for control in walk(length_dialog)
+        if isinstance(control, ft.TextField)
+    )
+    length_input.value = "6.33"
+    next(
+        control
+        for control in walk(length_dialog)
+        if isinstance(control, ft.FilledButton) and text_of(control) == "Применить"
+    ).on_click(None)
+
+    find_button(page, "20").on_click(None)
+
+    dialog = page.dialogs[-1]
+    assert isinstance(dialog, ft.AlertDialog)
+    assert isinstance(dialog.title, ft.Text)
+    assert dialog.title.value == "Нет значения в таблице"
+    assert any(
+        isinstance(control, ft.FilledButton) and text_of(control) == "Закрыть"
+        for control in walk(dialog)
+    )
