@@ -69,7 +69,7 @@ def test_home_screen_builds_with_installed_flet_api(tmp_path, monkeypatch):
 
     main(page)
 
-    assert page.title == "Расчёт кубатуры"
+    assert page.title == "Кубатура Экспресс"
     assert isinstance(page.appbar, ft.AppBar)
     assert any(
         isinstance(control, ft.ListTile)

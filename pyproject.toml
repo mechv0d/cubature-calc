@@ -7,9 +7,9 @@ dependencies = ["flet==0.86.0"]
 
 [tool.flet]
 org = "com.example"
-product = "Расчёт кубатуры"
-company = "Local"
-copyright = "Copyright (C) 2026"
+product = "Кубатура Экспресс"
+company = "Sergei Rem"
+copyright = "Copyright mechv0d (C) 2026"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

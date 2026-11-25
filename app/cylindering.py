@@ -68,6 +68,18 @@ def show_cylindering(page: ft.Page, show_home):
         bgcolor=GREEN,
         color="white",
         center_title=True,
+        actions=[
+            ft.PopupMenuButton(
+                icon=ft.Icons.MORE_VERT,
+                tooltip="Меню",
+                items=[
+                    ft.PopupMenuItem(
+                        content=ft.Text("Очистить записи"),
+                        on_click=lambda _: confirm_clear_records(),
+                    ),
+                ],
+            ),
+        ],
     )
 
     total_volume = ft.Text("0.000 м³", size=25, color=ORANGE,
@@ -104,6 +116,29 @@ def show_cylindering(page: ft.Page, show_home):
         count = sum(x["quantity"] for x in items)
         total_volume.value = f"{format_volume(volume)} м³"
         total_count.value = f"{count} шт."
+
+    def confirm_clear_records():
+        def clear(_):
+            items.clear()
+            selected_diameter["value"] = None
+            save_state()
+            page.pop_dialog()
+            update_totals()
+            refresh_records()
+            refresh_diameter_buttons()
+            if active_tab["value"] == "summary":
+                refresh_summary()
+            page.update()
+
+        page.show_dialog(ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Очистить записи?"),
+            content=ft.Text("Все добавленные брёвна будут удалены."),
+            actions=[
+                ft.TextButton("Отмена", on_click=lambda _: page.pop_dialog()),
+                ft.TextButton("Очистить", on_click=clear),
+            ],
+        ))
 
     def refresh_summary():
         summary.controls.clear()

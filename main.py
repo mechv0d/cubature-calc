@@ -25,7 +25,7 @@ GOST_TABLE = load_gost_table()
 
 def main(page: ft.Page):
     init_db()
-    page.title = "Расчёт кубатуры"
+    page.title = "Кубатура Экспресс"
     page.theme_mode = ft.ThemeMode.LIGHT
     page.bgcolor = BG
     page.padding = 0
@@ -54,7 +54,7 @@ def main(page: ft.Page):
         allow_screen_sleep(page)
         page.controls.clear()
         page.appbar = ft.AppBar(
-            title=ft.Text("Расчёт кубатуры", weight=ft.FontWeight.W_600),
+            title=ft.Text("Кубатура Экспресс", weight=ft.FontWeight.W_600),
             bgcolor=GREEN,
             color="white",
             center_title=True,
@@ -132,6 +132,18 @@ menu_card(
             bgcolor=GREEN,
             color="white",
             center_title=True,
+            actions=[
+                ft.PopupMenuButton(
+                    icon=ft.Icons.MORE_VERT,
+                    tooltip="Меню",
+                    items=[
+                        ft.PopupMenuItem(
+                            content=ft.Text("Очистить записи"),
+                            on_click=lambda _: confirm_clear_records(),
+                        ),
+                    ],
+                ),
+            ],
         )
 
         total_volume = ft.Text("0.0000 м³", size=25, color=ORANGE,
@@ -179,6 +191,23 @@ menu_card(
                 "length": selected_length["value"],
                 "tab": active_tab["value"],
             })
+
+        def confirm_clear_records():
+            def clear(_):
+                current_items.clear()
+                save_state()
+                page.pop_dialog()
+                refresh_items()
+
+            page.show_dialog(ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Очистить записи?"),
+                content=ft.Text("Все добавленные брёвна будут удалены."),
+                actions=[
+                    ft.TextButton("Отмена", on_click=lambda _: page.pop_dialog()),
+                    ft.TextButton("Очистить", on_click=clear),
+                ],
+            ))
 
         def refresh_summary():
             summary_view.controls.clear()
@@ -569,6 +598,7 @@ menu_card(
         def confirm_clear_records():
             def clear(_):
                 lumber_items.clear()
+                save_state()
                 page.pop_dialog()
                 refresh_records()
 
