@@ -1,4 +1,4 @@
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 import flet as ft
 
@@ -75,10 +75,6 @@ def main(page: ft.Page):
                             "Расчёт досок и бруса",
                             lambda _: show_lumber_calculator(),
                         ),
-                        menu_card("ОСТ 13-232-87", "В разработке",
-                                  lambda _: show_placeholder("ОСТ 13-232-87")),
-                        menu_card("ISO 4480-83", "В разработке",
-                                  lambda _: show_placeholder("ISO 4480-83")),
 
 menu_card(
     "Оцилиндровка",
@@ -411,15 +407,27 @@ menu_card(
         summary_details = ft.Text("0 шт. · 0.00 RUB.", size=16, color=TEXT)
         records = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
         price_currency = "RUB."
+        rounding_digits = {"value": 4}  # По умолчанию 0.0000
 
-        def fmt(value, places=4):
+        def fmt(value, places=None):
+            if places is None:
+                places = rounding_digits["value"]
             return f"{value:.{places}f}"
 
+        def rounded_volume(item):
+            quantum = Decimal(1).scaleb(-rounding_digits["value"])
+            return lumber_volume(item).quantize(
+                quantum, rounding=ROUND_HALF_UP
+            )
+
         def update_summary():
-            total_volume = sum((lumber_volume(x) for x in lumber_items), Decimal(0))
+            # Каждая позиция сначала округляется, затем значения складываются.
+            total_volume = sum(
+                (rounded_volume(x) for x in lumber_items), Decimal(0)
+            )
             total_count = sum(int(x["quantity"]) for x in lumber_items)
             total_price = sum((
-                lumber_volume(x) * Decimal(str(x.get("price_per_m3", 0)))
+                rounded_volume(x) * Decimal(str(x.get("price_per_m3", 0)))
                 for x in lumber_items
             ), Decimal(0))
             summary_volume.value = f"{fmt(total_volume)} м³"
@@ -492,7 +500,7 @@ menu_card(
                 )
 
             for index, item in enumerate(lumber_items):
-                volume = lumber_volume(item)
+                volume = rounded_volume(item)
                 price = volume * Decimal(str(item.get("price_per_m3", 0)))
                 unit_volume = (
                     Decimal(str(item["thickness_cm"])) / Decimal(100)
@@ -628,7 +636,7 @@ menu_card(
                     "thickness_cm": 0,
                     "width_cm": 0,
                     "length_m": 0,
-                    "quantity": 0,
+                    "quantity": 1,
                     "price_per_m3": 0,
                     "thickness_unit": "CM",
                     "width_unit": "CM",
@@ -687,9 +695,7 @@ menu_card(
                         value *= Decimal(100)
                 return format(value.normalize(), "f")
 
-            def update_editor_values():
-                for key, field in fields.items():
-                    field.value = shown_value(key)
+            def refresh_calculations():
                 unit_volume = (
                     Decimal(str(data["thickness_cm"])) / Decimal(100)
                     * Decimal(str(data["width_cm"])) / Decimal(100)
@@ -707,6 +713,49 @@ menu_card(
                     )
                 else:
                     per_cubic_label.value = "В 1 м³: —"
+
+            def parse_field_value(key, text):
+                """Привести введённое значение к внутренним см/м/шт."""
+                if text is None:
+                    return None
+                text = str(text).strip().replace(",", ".")
+                if not text:
+                    return Decimal(0)
+                try:
+                    number = Decimal(text)
+                except InvalidOperation:
+                    return None
+                if not number.is_finite() or number < 0:
+                    return None
+                if key == "quantity":
+                    return int(number)
+                if key in unit_modes:
+                    unit = unit_modes[key]["value"]
+                    if key in ("thickness_cm", "width_cm"):
+                        if unit == "MM":
+                            number /= Decimal(10)
+                        elif unit == "M":
+                            number *= Decimal(100)
+                    elif key == "length_m":
+                        if unit == "MM":
+                            number /= Decimal(1000)
+                        elif key == "CM":
+                            number /= Decimal(100)
+                return number
+
+            def apply_field_value(key, text, refresh=True):
+                number = parse_field_value(key, text)
+                if number is None:
+                    return False
+                data[key] = number
+                if refresh:
+                    refresh_calculations()
+                return True
+
+            def update_editor_values():
+                for key, field in fields.items():
+                    field.value = shown_value(key)
+                refresh_calculations()
 
             def select_field(key):
                 if key not in field_order:
@@ -736,11 +785,15 @@ menu_card(
             for key in field_order:
                 label, default_unit = labels[key]
                 field = ft.TextField(
-                    value=shown_value(key), read_only=True,
+                    value=shown_value(key),
+                    keyboard_type=ft.KeyboardType.NUMBER,
                     border=ft.InputBorder.NONE, text_size=16,
                     text_align=ft.TextAlign.START, expand=True,
                     bgcolor="#FFFFFF",
                     on_focus=lambda e, k=key: select_field(k),
+                    on_change=lambda e, k=key: apply_field_value(
+                        k, e.control.value
+                    ),
                 )
                 fields[key] = field
                 unit_label = (
@@ -770,48 +823,11 @@ menu_card(
                 if key not in unit_modes:
                     return
                 unit_modes[key]["value"] = unit
+                # Число в поле не пересчитывается: оно остаётся таким, каким
+                # его ввёл пользователь, меняется только единица измерения.
+                apply_field_value(key, fields[key].value)
                 unit_texts[key].value = UNIT_NAMES[unit]
-                update_editor_values()
                 refresh_unit_buttons()
-                page.update()
-
-            def key_press(value):
-                key = active_field["value"]
-                if key not in fields:
-                    return
-                current = shown_value(key)
-                if value == "⌫":
-                    current = current[:-1]
-                elif value == ".":
-                    if key == "quantity" or "." in current:
-                        return
-                    current = (current or "0") + "."
-                else:
-                    current = ("" if current == "0" else current) + value
-                if current in ("", "."):
-                    current = "0" if current == "" else "0."
-                try:
-                    number = Decimal(current)
-                    if number < 0:
-                        return
-                    if key == "quantity":
-                        number = int(number)
-                    elif key in unit_modes:
-                        unit = unit_modes[key]["value"]
-                        if key in ("thickness_cm", "width_cm"):
-                            if unit == "MM":
-                                number /= Decimal(10)
-                            elif unit == "M":
-                                number *= Decimal(100)
-                        elif key == "length_m":
-                            if unit == "MM":
-                                number /= Decimal(1000)
-                            elif unit == "CM":
-                                number /= Decimal(100)
-                    data[key] = number
-                    update_editor_values()
-                except (InvalidOperation, ValueError):
-                    return
                 page.update()
 
             def make_unit_button(unit):
@@ -826,63 +842,52 @@ menu_card(
                 unit_buttons[unit] = button
                 return button
 
-            keypad = ft.Column(
-                spacing=3,
-                controls=[
-                    ft.Row(spacing=4, controls=[
-                        make_unit_button(unit)
-                        for unit in ("MM", "CM", "M")
-                    ]),
-                    *[
-                        ft.Row(spacing=4, controls=[
-                            ft.FilledButton(
-                                value, expand=True, height=39,
-                                style=ft.ButtonStyle(
-                                    bgcolor="#F0F2F1", color=TEXT,
-                                    padding=ft.Padding.all(2),
-                                    text_style=ft.TextStyle(size=20),
-                                ),
-                                on_click=lambda e, v=value: key_press(v),
-                            )
-                            for value in trio
-                        ])
-                        for trio in (
-                            ("1", "2", "3"), ("4", "5", "6"),
-                            ("7", "8", "9"), ("⌫", "0", "."),
-                        )
-                    ],
-                ],
+            unit_row = ft.Row(
+                spacing=4,
+                controls=[make_unit_button(unit) for unit in ("MM", "CM", "M")],
             )
 
-            def move_field(direction):
-                current = active_field["value"]
-                if current not in field_order:
-                    current = "thickness_cm"
-                next_index = max(
-                    0, min(len(field_order) - 1,
-                           field_order.index(current) + direction)
-                )
-                select_field(field_order[next_index])
-
             def confirm_delete():
+                close_editor = {"value": False}
+
+                def on_dismiss(_):
+                    # В вебе два pop_dialog() подряд в одном обработчике
+                    # могут не сработать (второй диалог остаётся открытым),
+                    # поэтому редактор закрываем только после того, как окно
+                    # подтверждения действительно закрылось.
+                    if close_editor["value"]:
+                        page.pop_dialog()
+
                 def delete(_):
-                    # Close the confirmation dialog and the editor itself.
-                    page.pop_dialog()
+                    close_editor["value"] = True
                     page.pop_dialog()
                     if index is not None:
                         delete_lumber(index)
+
+                def cancel(_):
+                    close_editor["value"] = False
+                    page.pop_dialog()
 
                 page.show_dialog(ft.AlertDialog(
                     modal=True,
                     title=ft.Text("Удалить запись?"),
                     content=ft.Text("Текущая позиция будет закрыта без сохранения."),
                     actions=[
-                        ft.TextButton("Отмена", on_click=lambda _: page.pop_dialog()),
+                        ft.TextButton("Отмена", on_click=cancel),
                         ft.TextButton("Удалить", on_click=delete),
                     ],
+                    on_dismiss=on_dismiss,
                 ))
 
             def commit(_):
+                # Перед сохранением подхватываем актуальный текст полей:
+                # значения могли быть изменены без события on_change.
+                for key in field_order:
+                    if not apply_field_value(key, fields[key].value, refresh=False):
+                        page.show_dialog(ft.SnackBar(
+                            content=ft.Text("Проверьте размеры, количество и цену.")
+                        ))
+                        return
                 try:
                     for key in ("thickness_cm", "width_cm", "length_m"):
                         if Decimal(str(data[key])) <= 0:
@@ -922,22 +927,12 @@ menu_card(
                     ft.Row(controls=[volume_label, price_label], spacing=10),
                     *rows,
                     per_cubic_label,
-                    keypad,
-                    ft.Row(spacing=3, controls=[
-                        ft.IconButton(
-                            ft.Icons.KEYBOARD_ARROW_UP, icon_size=21,
-                            on_click=lambda _: move_field(-1),
-                        ),
-                        ft.FilledButton(
-                            "OK", expand=True, height=44,
-                            style=ft.ButtonStyle(bgcolor="#E77C3B", color="white"),
-                            on_click=commit,
-                        ),
-                        ft.IconButton(
-                            ft.Icons.KEYBOARD_ARROW_DOWN, icon_size=21,
-                            on_click=lambda _: move_field(1),
-                        ),
-                    ]),
+                    unit_row,
+                    ft.FilledButton(
+                        "OK", expand=True, height=44, width=120,
+                        style=ft.ButtonStyle(bgcolor="#E77C3B", color="white"),
+                        on_click=commit,
+                    ),
                 ],
             )
             page.show_dialog(ft.AlertDialog(

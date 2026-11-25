@@ -51,6 +51,13 @@ def show_cylindering(page: ft.Page, show_home):
     def format_volume(value: float) -> str:
         return f"{value:.{rounding_digits['value']}f}"
 
+    def item_volume(item) -> float:
+        """Объём позиции, округлённый до выбранной точности."""
+        return round(
+            cylinder_volume(item["diameter"], item["length"], item["quantity"]),
+            rounding_digits["value"],
+        )
+
     def find_selected_item():
         diameter = selected_diameter["value"]
         length = selected_length["value"]
@@ -62,10 +69,8 @@ def show_cylindering(page: ft.Page, show_home):
         return None
 
     def update_totals():
-        volume = sum(
-            cylinder_volume(x["diameter"], x["length"], x["quantity"])
-            for x in items
-        )
+        # Каждая позиция сначала округляется, затем значения складываются.
+        volume = sum(item_volume(x) for x in items)
         count = sum(x["quantity"] for x in items)
         total_volume.value = f"{format_volume(volume)} м³"
         total_count.value = f"{count} шт."
@@ -81,9 +86,7 @@ def show_cylindering(page: ft.Page, show_home):
             diameter = item["diameter"]
             grouped.setdefault(diameter, {"quantity": 0, "volume": 0.0})
             grouped[diameter]["quantity"] += item["quantity"]
-            grouped[diameter]["volume"] += cylinder_volume(
-                diameter, item["length"], item["quantity"]
-            )
+            grouped[diameter]["volume"] += item_volume(item)
 
         if not grouped:
             summary.controls.append(
@@ -127,9 +130,7 @@ def show_cylindering(page: ft.Page, show_home):
             )
 
         for index, item in enumerate(items):
-            volume = cylinder_volume(
-                item["diameter"], item["length"], item["quantity"]
-            )
+            volume = item_volume(item)
             is_selected = item["diameter"] == selected_diameter["value"]
 
             records.controls.append(
