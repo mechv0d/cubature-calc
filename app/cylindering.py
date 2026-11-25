@@ -3,6 +3,11 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import flet as ft
 
+from app.screen_utils import (
+    keep_screen_awake,
+    load_screen_state,
+    save_screen_state,
+)
 from app.storage import save_calculation
 
 GREEN = "#176B4A"
@@ -30,11 +35,28 @@ def round_volume(value, digits: int) -> Decimal:
 def show_cylindering(page: ft.Page, show_home):
     """Отдельный экран расчёта оцилиндрованных брёвен."""
 
-    items = []
-    selected_diameter = {"value": None}
-    selected_length = {"value": 7.0}
-    active_tab = {"value": "table"}
-    rounding_digits = {"value": 3}  # По умолчанию 0.000
+    keep_screen_awake(page)
+
+    # Restore the draft saved on the previous run (app/phone restart).
+    draft = load_screen_state("cylindering")
+    items = list(draft.get("items", []))
+    selected_diameter = {"value": draft.get("diameter")}
+    selected_length = {"value": float(draft.get("length", 7.0))}
+    active_tab = {"value": draft.get("tab", "table")}
+    try:
+        saved_digits = int(draft.get("rounding", 3))
+    except (TypeError, ValueError):
+        saved_digits = 3
+    rounding_digits = {"value": min(max(saved_digits, 1), 6)}
+
+    def save_state():
+        save_screen_state("cylindering", {
+            "items": items,
+            "diameter": selected_diameter["value"],
+            "length": selected_length["value"],
+            "tab": active_tab["value"],
+            "rounding": rounding_digits["value"],
+        })
 
     page.controls.clear()
     page.appbar = ft.AppBar(
@@ -213,6 +235,7 @@ def show_cylindering(page: ft.Page, show_home):
             refresh_summary()
 
         refresh_diameter_buttons()
+        save_state()
         page.update()
 
     def refresh_diameter_buttons():
@@ -266,6 +289,7 @@ def show_cylindering(page: ft.Page, show_home):
         )
         if not is_table:
             refresh_summary()
+        save_state()
         page.update()
 
     def open_length_picker(_):
@@ -298,6 +322,7 @@ def show_cylindering(page: ft.Page, show_home):
                             weight=ft.FontWeight.BOLD),
                 ],
             )
+            save_state()
             page.pop_dialog()
             page.update()
 
@@ -378,7 +403,7 @@ def show_cylindering(page: ft.Page, show_home):
 
     rounding_selector = ft.Dropdown(
         label="Округление",
-        value="0.000",
+        value="0." + "0" * rounding_digits["value"],
         width=150,
         dense=True,
         text_size=15,
@@ -428,7 +453,7 @@ def show_cylindering(page: ft.Page, show_home):
             tight=True,
             controls=[
                 ft.Icon(ft.Icons.STRAIGHTEN, color="white"),
-                ft.Text("ДЛИНА: 7", color="white",
+                ft.Text(f"ДЛИНА: {selected_length['value']:g}", color="white",
                         weight=ft.FontWeight.BOLD),
             ],
         ),
@@ -487,3 +512,5 @@ def show_cylindering(page: ft.Page, show_home):
         ],
     ))
     refresh_records()
+    if active_tab["value"] == "summary":
+        choose_tab("summary")

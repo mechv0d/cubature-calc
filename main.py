@@ -4,6 +4,12 @@ import flet as ft
 
 from app.calculators.gost_2708 import calculate_gost_item, load_gost_table
 from app.cylindering import show_cylindering
+from app.screen_utils import (
+    allow_screen_sleep,
+    keep_screen_awake,
+    load_screen_state,
+    save_screen_state,
+)
 from app.storage import init_db, list_calculations
 
 GREEN = "#176B4A"
@@ -45,6 +51,7 @@ def main(page: ft.Page):
         )
 
     def show_home():
+        allow_screen_sleep(page)
         page.controls.clear()
         page.appbar = ft.AppBar(
             title=ft.Text("Расчёт кубатуры", weight=ft.FontWeight.W_600),
@@ -116,6 +123,7 @@ menu_card(
         page.update()
 
     def show_gost_calculator():
+        keep_screen_awake(page)
         page.controls.clear()
         active_tab["value"] = "table"
         page.appbar = ft.AppBar(
@@ -142,6 +150,35 @@ menu_card(
         def format_length(value):
             text = f"{value:g}"
             return f"{text}.0" if "." not in text else text
+
+        # Restore the draft so the calculation survives an app/phone restart.
+        draft = load_screen_state("gost")
+        current_items.clear()
+        for saved_item in draft.get("items", []):
+            try:
+                volume = Decimal(str(saved_item["volume"]))
+            except (KeyError, InvalidOperation, TypeError, ValueError):
+                continue
+            current_items.append({
+                "diameter": int(saved_item["diameter"]),
+                "length": float(saved_item["length"]),
+                "quantity": max(1, int(saved_item["quantity"])),
+                "volume": volume,
+                "display_volume": format_gost_volume(volume),
+            })
+        try:
+            selected_length["value"] = float(draft.get("length", 6.0))
+        except (TypeError, ValueError):
+            selected_length["value"] = 6.0
+        if draft.get("tab") == "summary":
+            active_tab["value"] = "summary"
+
+        def save_state():
+            save_screen_state("gost", {
+                "items": current_items,
+                "length": selected_length["value"],
+                "tab": active_tab["value"],
+            })
 
         def refresh_summary():
             summary_view.controls.clear()
@@ -246,6 +283,7 @@ menu_card(
             total_volume.value = f"{format_gost_volume(total)} м³"
             if active_tab["value"] == "summary":
                 refresh_summary()
+            save_state()
             page.update()
 
         def remove_item(index):
@@ -303,6 +341,7 @@ menu_card(
             )
             if not is_table:
                 refresh_summary()
+            save_state()
             page.update()
 
         def open_length_picker(_):
@@ -327,6 +366,7 @@ menu_card(
                     ft.Text(f"ДЛИНА: {value:g}", color="white",
                             weight=ft.FontWeight.BOLD),
                 ])
+                save_state()
                 page.pop_dialog()
                 page.update()
 
@@ -391,7 +431,8 @@ menu_card(
         length_button = ft.FilledButton(
             content=ft.Row(tight=True, controls=[
                 ft.Icon(ft.Icons.STRAIGHTEN, color="white"),
-                ft.Text("ДЛИНА: 6", color="white", weight=ft.FontWeight.BOLD),
+                ft.Text(f"ДЛИНА: {selected_length['value']:g}", color="white",
+                        weight=ft.FontWeight.BOLD),
             ]),
             style=ft.ButtonStyle(bgcolor="#8C918F", color="white"),
             on_click=open_length_picker,
@@ -428,6 +469,8 @@ menu_card(
             ],
         ))
         refresh_items()
+        if active_tab["value"] == "summary":
+            choose_tab("summary")
         page.update()
 
     def lumber_volume(item):
@@ -439,6 +482,7 @@ menu_card(
         )
 
     def show_lumber_calculator():
+        keep_screen_awake(page)
         page.controls.clear()
         page.appbar = ft.AppBar(
             leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda _: show_home()),
@@ -463,7 +507,21 @@ menu_card(
         summary_details = ft.Text("0 шт. · 0.00 RUB.", size=16, color=TEXT)
         records = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
         price_currency = "RUB."
-        rounding_digits = {"value": 4}  # По умолчанию 0.0000
+
+        # Restore the draft saved on the previous run (app/phone restart).
+        draft = load_screen_state("lumber")
+        lumber_items[:] = draft.get("items", [])
+        try:
+            saved_digits = int(draft.get("rounding", 4))
+        except (TypeError, ValueError):
+            saved_digits = 4
+        rounding_digits = {"value": min(max(saved_digits, 1), 6)}
+
+        def save_state():
+            save_screen_state("lumber", {
+                "items": lumber_items,
+                "rounding": rounding_digits["value"],
+            })
 
         def fmt(value, places=None):
             if places is None:
@@ -485,7 +543,7 @@ menu_card(
 
         rounding_selector = ft.Dropdown(
             label="Округление",
-            value="0.0000",
+            value="0." + "0" * rounding_digits["value"],
             width=140,
             dense=True,
             text_size=15,
@@ -695,6 +753,7 @@ menu_card(
                 )
 
             update_summary()
+            save_state()
             page.update()
 
         def open_lumber_editor(index=None, duplicate=None, focus="thickness"):
