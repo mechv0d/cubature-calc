@@ -204,7 +204,7 @@ def show_cylindering(page: ft.Page, show_home):
                                                 color=TEXT,
                                             ),
                                             ft.Text(
-                                                f'{item["quantity"]} шт. · #{index + 1}',
+                                                f'{item["quantity"]} шт.',
                                                 size=13,
                                                 color=TEXT,
                                             ),
