@@ -28,9 +28,11 @@ jobs:
           cache: pip
 
       - name: Install app and validation tools
+        # Install the app's own dependencies, otherwise tests that need
+        # reportlab (PDF) or fastapi (web) fail on the runner.
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "flet==0.86.0" "openpyxl>=3.1" pytest ruff
+          python -m pip install -r requirements.txt pytest ruff
 
       - name: Check Python syntax
         run: python -m compileall -q main.py app tests
