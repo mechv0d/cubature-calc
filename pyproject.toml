@@ -3,7 +3,7 @@ name = "cubature-calculator"
 version = "0.1.0"
 description = "Offline timber volume calculator"
 requires-python = ">=3.13,<3.14"
-dependencies = ["flet==0.86.0", "reportlab>=4.0"]
+dependencies = ["flet==0.86.0", "openpyxl>=3.1", "reportlab>=4.0"]
 
 [tool.flet]
 org = "com.example"

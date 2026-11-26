@@ -20,9 +20,13 @@ dist/
 *.sqlite3
 *.db
 *.pdf
+temp
 
 # Editors / OS
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# Excel exports
+*.xlsx

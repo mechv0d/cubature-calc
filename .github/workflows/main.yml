@@ -30,7 +30,7 @@ jobs:
       - name: Install app and validation tools
         run: |
           python -m pip install --upgrade pip
-          python -m pip install "flet==0.86.0" pytest ruff
+          python -m pip install "flet==0.86.0" "openpyxl>=3.1" pytest ruff
 
       - name: Check Python syntax
         run: python -m compileall -q main.py app tests

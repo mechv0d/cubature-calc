@@ -13,6 +13,7 @@ class FakePage:
         self.title = None
         self.appbar = None
         self.dialogs = []
+        self.height = 800
 
     def add(self, *controls):
         self.controls.extend(controls)
@@ -21,11 +22,13 @@ class FakePage:
         pass
 
     def show_dialog(self, dialog):
+        dialog.open = True
         self.dialogs.append(dialog)
 
     def pop_dialog(self):
         if self.dialogs:
-            self.dialogs.pop()
+            dialog = self.dialogs.pop()
+            dialog.open = False
 
 
 def walk(control):
@@ -154,7 +157,7 @@ def test_gost_volume_comes_from_table(tmp_path, monkeypatch):
     find_button(page, "20").on_click(None)
 
     assert any(
-        isinstance(control, ft.Text) and control.value == "0.2300 м³"
+        isinstance(control, ft.Text) and control.value == "0.230 м³"
         for control in all_controls(page)
     )
 

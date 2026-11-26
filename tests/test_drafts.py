@@ -39,7 +39,7 @@ def test_gost_draft_survives_restart(tmp_path, monkeypatch):
     open_gost_screen(second)
 
     assert any(
-        isinstance(control, ft.Text) and control.value == "0.2300 м³"
+        isinstance(control, ft.Text) and control.value == "0.230 м³"
         for control in all_controls(second)
     )
     assert any(

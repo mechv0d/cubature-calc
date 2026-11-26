@@ -72,6 +72,19 @@ def init_db():
                 updated_at TEXT NOT NULL
             )
         """)
+        # Counterparties are a reusable registry: a party keeps a snapshot of
+        # the selected counterparty, while this table holds the current list.
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS counterparties (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL COLLATE NOCASE UNIQUE,
+                phone TEXT NOT NULL DEFAULT '',
+                email TEXT NOT NULL DEFAULT '',
+                info TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
 
 
 def save_calculation(name, items):
@@ -190,3 +203,92 @@ def update_party(party_id, name, description, counterparty, payload):
                 now, party_id,
             ),
         )
+
+
+def _counterparty_name_exists(name, exclude_id=None):
+    # SQLite's NOCASE only folds ASCII letters, so compare in Python to keep
+    # Cyrillic names unique regardless of case as well.
+    folded = (name or "").strip().casefold()
+    with connect() as db:
+        rows = db.execute("SELECT id, name FROM counterparties").fetchall()
+    return any(
+        row_id != exclude_id and (row_name or "").strip().casefold() == folded
+        for row_id, row_name in rows
+    )
+
+
+def find_counterparty_by_name(name):
+    """Return the registry counterparty with this name (case-insensitive)."""
+    folded = (name or "").strip().casefold()
+    return next(
+        (cp for cp in list_counterparties()
+         if (cp["name"] or "").strip().casefold() == folded),
+        None,
+    )
+
+
+def list_counterparties():
+    """Return the reusable counterparties ordered by name."""
+    with connect() as db:
+        rows = db.execute(
+            """SELECT id, name, phone, email, info, created_at, updated_at
+               FROM counterparties ORDER BY name COLLATE NOCASE"""
+        ).fetchall()
+    return [
+        {
+            "id": row[0], "name": row[1], "phone": row[2], "email": row[3],
+            "info": row[4], "created_at": row[5], "updated_at": row[6],
+        }
+        for row in rows
+    ]
+
+
+def save_counterparty(name, phone="", email="", info=""):
+    """Save a counterparty to the registry and return its id.
+
+    The name is required. If a counterparty with the same name already exists
+    (case-insensitive), its phone, email and info are updated instead of
+    raising an error. ``ValueError`` is raised when the name is empty.
+    """
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("Укажите название контрагента")
+    existing = find_counterparty_by_name(name)
+    if existing:
+        update_counterparty(
+            existing["id"], existing["name"], phone, email, info,
+        )
+        return existing["id"]
+    now = datetime.now().isoformat(timespec="seconds")
+    with connect() as db:
+        cursor = db.execute(
+            """INSERT INTO counterparties
+               (name, phone, email, info, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (name, (phone or "").strip(), (email or "").strip(),
+             (info or "").strip(), now, now),
+        )
+        return cursor.lastrowid
+
+
+def update_counterparty(counterparty_id, name, phone="", email="", info=""):
+    """Update a registry counterparty; the name stays required and unique."""
+    name = (name or "").strip()
+    if not name:
+        raise ValueError("Укажите название контрагента")
+    if _counterparty_name_exists(name, exclude_id=counterparty_id):
+        raise ValueError("Контрагент с таким названием уже существует")
+    now = datetime.now().isoformat(timespec="seconds")
+    with connect() as db:
+        db.execute(
+            """UPDATE counterparties SET name = ?, phone = ?, email = ?,
+                      info = ?, updated_at = ? WHERE id = ?""",
+            (name, (phone or "").strip(), (email or "").strip(),
+             (info or "").strip(), now, counterparty_id),
+        )
+
+
+def delete_counterparty(counterparty_id):
+    """Remove a counterparty from the registry (saved parties keep a copy)."""
+    with connect() as db:
+        db.execute("DELETE FROM counterparties WHERE id = ?", (counterparty_id,))
