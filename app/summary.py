@@ -32,7 +32,7 @@ DEFAULT_PRICE_RANGES = (
     {"from": 18, "to": 120, "price": "0"},
 )
 
-COLUMN_WIDTHS = {"length": 52, "quantity": 38, "volume": 68, "cost": 78}
+COLUMN_WIDTHS = {"length": 46, "quantity": 32, "volume": 62, "cost": 70}
 
 #: Высота полосы вкладок «Таблица» / «Итоги» и кнопок на ней.
 TAB_BAR_HEIGHT = 46
@@ -276,6 +276,45 @@ def summary_row(values, bold=False, bgcolor=None, size=14):
     )
 
 
+def range_total_row(price_range, group, digits=3):
+    """Subtotal for one price range as a full-width band.
+
+    The ``[3-11]`` label does not fit into the narrow diameter column on
+    phones (especially with a large system font scale), where it used to be
+    clipped. A band with its own line always shows the range in full.
+    """
+    quantity = sum(item["quantity"] for item in group)
+    group_volume = sum((item["volume"] for item in group), Decimal(0))
+    range_price = Decimal(price_range["price"])
+    group_cost = group_volume * range_price
+    return ft.Container(
+        bgcolor="#FBFBF8",
+        border=ft.Border(bottom=ft.BorderSide(1, "#ECEFF0")),
+        padding=ft.Padding.symmetric(horizontal=8, vertical=7),
+        content=ft.Column(spacing=2, controls=[
+            ft.Text(
+                f"[{price_range['from']}-{price_range['to']}]",
+                size=14, weight=ft.FontWeight.BOLD, color="#1B211C",
+            ),
+            ft.Row(
+                spacing=8, wrap=True, run_spacing=2,
+                alignment=ft.MainAxisAlignment.SPACE_BETWEEN,
+                controls=[
+                    ft.Text(f"{quantity} шт.", size=13, color=TEXT),
+                    ft.Text(
+                        f"{format_volume(group_volume, digits)} м³",
+                        size=13, color=ORANGE, weight=ft.FontWeight.BOLD,
+                    ),
+                    ft.Text(
+                        format_money(group_cost), size=14,
+                        color="#1B211C", weight=ft.FontWeight.BOLD,
+                    ),
+                ],
+            ),
+        ]),
+    )
+
+
 def build_summary_table(groups, leftovers, digits=3, empty_text=None):
     header = ft.Container(
         bgcolor="#F4F0E1",
@@ -288,10 +327,10 @@ def build_summary_table(groups, leftovers, digits=3, empty_text=None):
             summary_cell("кол.", column="quantity", bold=True,
                          color="#1B211C", size=12,
                          align=ft.Alignment.CENTER_RIGHT),
-            summary_cell("объем", column="volume", bold=True,
+            summary_cell("объём", column="volume", bold=True,
                          color="#1B211C", size=12,
                          align=ft.Alignment.CENTER_RIGHT),
-            summary_cell("стоимос...", column="cost", bold=True,
+            summary_cell("сумма", column="cost", bold=True,
                          color="#1B211C", size=12,
                          align=ft.Alignment.CENTER_RIGHT),
         ]),
@@ -309,15 +348,7 @@ def build_summary_table(groups, leftovers, digits=3, empty_text=None):
                 ("volume", item["display_volume"]),
                 ("cost", format_money(item["volume"] * range_price)),
             ]))
-        group_volume = sum((item["volume"] for item in group), Decimal(0))
-        group_cost = group_volume * range_price
-        rows.append(summary_row([
-            ("diameter", f"[{price_range['from']}-{price_range['to']}]"),
-            ("length", ""),
-            ("quantity", sum(item["quantity"] for item in group)),
-            ("volume", format_volume(group_volume, digits)),
-            ("cost", format_money(group_cost)),
-        ], bold=True, bgcolor="#FBFBF8", size=15))
+        rows.append(range_total_row(price_range, group, digits))
     for item in leftovers:
         rows.append(summary_row([
             ("diameter", item["diameter"]),

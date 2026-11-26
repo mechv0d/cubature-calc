@@ -16,12 +16,18 @@ Markdown-файлы рядом.  Картинки лежат в ``assets/guide``
 """
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 CONTENT_DIR = Path(__file__).resolve().parent / "guide"
+#: Каталог ресурсов: в APK это путь из ``FLET_ASSETS_DIR``, локально — ``assets``.
+ASSETS_ROOT = Path(
+    os.environ.get("FLET_ASSETS_DIR")
+    or Path(__file__).resolve().parent.parent.parent / "assets"
+)
 #: ``app/content/guide.py`` → корень проекта → ``assets/guide``.
-ASSET_ROOT = Path(__file__).resolve().parent.parent.parent / "assets" / "guide"
+ASSET_ROOT = ASSETS_ROOT / "guide"
 
 #: Каталог картинок внутри ``assets_dir``.
 ASSET_DIR = "guide"

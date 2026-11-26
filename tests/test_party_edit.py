@@ -187,6 +187,16 @@ def test_asset_url_adds_version_from_file_mtime():
     assert asset_url("missing.png") == "missing.png"
 
 
+def test_asset_url_skips_cache_busting_in_native_builds(monkeypatch):
+    from main import asset_url
+
+    # In an APK Flutter looks the image up by its bundled asset key, so a
+    # query string would make the file unfindable (images stayed blank).
+    monkeypatch.setenv("FLET_ASSETS_DIR", r"C:\app\assets")
+    assert asset_url("pilomaterial.png") == "pilomaterial.png"
+    assert asset_url("guide/gost-table.jpg") == "guide/gost-table.jpg"
+
+
 def test_party_lumber_icon_gets_cache_busting_version(tmp_path, monkeypatch):
     monkeypatch.setattr(storage, "DB_PATH", tmp_path / "test.sqlite3")
     storage.init_db()

@@ -70,15 +70,31 @@ def setup_haptic(page):
 
 
 async def _play_haptic(service, method):
-    try:
-        await getattr(service, method)()
-    except Exception:
-        logger.warning("Could not play haptic feedback", exc_info=True)
+    # Try the requested method first, then the tick used by older Flet code:
+    # some Android builds ignore one of them, but not both.
+    for name in (method, "selection_click"):
+        try:
+            await getattr(service, name)()
+            return
+        except Exception:
+            logger.warning(
+                "Could not play haptic feedback (%s)", name, exc_info=True
+            )
 
 
-def vibrate(page, method="selection_click"):
-    """Play a short haptic feedback after adding a calculation item."""
+def vibrate(page, method="vibrate"):
+    """Play a short haptic feedback after adding a calculation item.
+
+    ``vibrate`` is the most reliable method across Android devices: the
+    ``selection_click`` tick is silently ignored on many phones (and when
+    "touch feedback" is disabled), while an explicit vibration is felt.
+    """
     service = _haptics.get(id(page))
+    if service is None:
+        # The screen was built before a service could be registered (or the
+        # registry dropped it): attach it lazily so the first tap already works.
+        setup_haptic(page)
+        service = _haptics.get(id(page))
     if service is None:
         return
     run_task = getattr(page, "run_task", None)

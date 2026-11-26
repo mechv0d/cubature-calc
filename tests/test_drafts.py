@@ -70,3 +70,19 @@ def test_wakelock_is_attached_only_once(monkeypatch):
 
     screen_utils.allow_screen_sleep(page)
     assert len(page.tasks) == 3
+
+
+def test_vibrate_attaches_service_and_uses_real_vibration(monkeypatch):
+    monkeypatch.setattr(screen_utils, "_haptics", {})
+    page = ServicePage()
+
+    # The first tap must attach the service itself (screens may have been
+    # built before the service existed) and use ``vibrate`` rather than the
+    # silent-on-many-phones ``selection_click`` tick.
+    screen_utils.vibrate(page)
+
+    assert len(page.services) == 1
+    assert isinstance(page.services[0], ft.HapticFeedback)
+    assert len(page.tasks) == 1
+    _, args = page.tasks[0]
+    assert args == (page.services[0], "vibrate")

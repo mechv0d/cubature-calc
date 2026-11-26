@@ -260,37 +260,47 @@ def show_cylindering(
                                 vertical_alignment=ft.CrossAxisAlignment.CENTER,
                                 controls=[
                                     ft.Container(
-                                        width=66,
-                                        height=48,
+                                        width=46,
                                         border_radius=10,
                                         bgcolor="#F5F6F6",
                                         alignment=ft.Alignment.CENTER,
+                                        padding=ft.Padding.symmetric(
+                                            horizontal=0, vertical=8
+                                        ),
                                         content=ft.Text(
                                             f'Ø{item["diameter"]}',
-                                            size=19,
+                                            size=16,
                                             weight=ft.FontWeight.W_600,
                                             color=TEXT,
+                                            no_wrap=True,
+                                            max_lines=1,
+                                            overflow=ft.TextOverflow.ELLIPSIS,
                                         ),
                                     ),
                                     ft.Column(
-                                        spacing=2,
+                                        spacing=1,
                                         expand=True,
                                         controls=[
                                             ft.Text(
                                                 f'{item["length"]:g} м',
-                                                size=15,
+                                                size=13,
                                                 color=TEXT,
+                                                no_wrap=True,
+                                                overflow=ft.TextOverflow.ELLIPSIS,
                                             ),
                                             ft.Text(
                                                 f'{item["quantity"]} шт.',
                                                 size=13,
                                                 color=TEXT,
+                                                no_wrap=True,
+                                                overflow=ft.TextOverflow.ELLIPSIS,
                                             ),
                                         ],
                                     ),
                                     ft.IconButton(
                                         ft.Icons.DELETE_OUTLINE,
                                         icon_color=TEXT,
+                                        icon_size=20,
                                         tooltip="Удалить позицию",
                                         on_click=lambda e, i=index: delete_item(i),
                                     ),
@@ -298,9 +308,12 @@ def show_cylindering(
                             ),
                             ft.Text(
                                 f"{format_volume(volume)} м³",
-                                size=21,
+                                size=18,
                                 color=ORANGE,
                                 weight=ft.FontWeight.BOLD,
+                                no_wrap=True,
+                                max_lines=1,
+                                overflow=ft.TextOverflow.ELLIPSIS,
                             ),
                         ],
                     ),

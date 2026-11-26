@@ -7,9 +7,27 @@ from pathlib import Path
 
 from app.storage import DATA_DIR
 
+
 # Fonts that ship with common desktop platforms and cover Cyrillic. The
 # built-in Helvetica font cannot render Russian text, so it must be replaced
 # with an embedded TrueType font.
+def _assets_dir() -> Path:
+    """Directory with bundled assets (the same one passed to ``ft.run``)."""
+    env_dir = os.environ.get("FLET_ASSETS_DIR")
+    if env_dir:
+        return Path(env_dir)
+    return Path(__file__).resolve().parent.parent / "assets"
+
+
+def _bundled_font_files():
+    """Font files shipped inside the app (guaranteed to exist on Android)."""
+    assets = _assets_dir()
+    google_sans = assets / "Google_Sans" / "static" / "GoogleSans-Regular.ttf"
+    # Google Sans covers Cyrillic; the bundle has no bold cut, so bold text
+    # falls back to the regular one instead of Helvetica's black squares.
+    return str(google_sans), ""
+
+
 _FONT_PAIRS = [
     (
         os.path.join(os.environ.get("WINDIR", r"C:\Windows"), "Fonts", "arial.ttf"),
@@ -28,6 +46,11 @@ _FONT_PAIRS = [
         "/System/Library/Fonts/Supplemental/Arial Bold.ttf",
     ),
     ("/Library/Fonts/Arial.ttf", "/Library/Fonts/Arial Bold.ttf"),
+    # Android system fonts (Roboto has Cyrillic).
+    ("/system/fonts/Roboto-Regular.ttf", "/system/fonts/Roboto-Bold.ttf"),
+    ("/system/fonts/NotoSans-Regular.ttf", "/system/fonts/NotoSans-Bold.ttf"),
+    # Last resort: the font bundled with the app itself.
+    _bundled_font_files(),
 ]
 
 _fonts = None

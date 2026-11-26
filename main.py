@@ -100,6 +100,11 @@ def asset_url(src):
     """
     if not src or src.startswith(("http://", "https://", "data:", "/")):
         return src
+    if os.environ.get("FLET_ASSETS_DIR"):
+        # В собранном приложении (APK/desktop) Flutter ищет картинку по имени
+        # файла в пакете ресурсов. Query-строка делает имя несуществующим,
+        # поэтому кеш-бастинг оставляем только для веба.
+        return src
     try:
         stamp = int((ASSETS_DIR / src.split("?", 1)[0]).stat().st_mtime)
     except OSError:
@@ -423,6 +428,7 @@ def main(page: ft.Page):
     selected_length = {"value": 6.0}
     active_tab = {"value": "table"}
     file_picker = {"value": None}
+    share_service = {"value": None}
 
     # Системный «Назад» на телефоне: главные экраны выходят по двойному
     # нажатию, вложенные — возвращают на предыдущий экран.
@@ -580,30 +586,41 @@ def main(page: ft.Page):
 
         dialog = ft.AlertDialog(
             modal=True,
+            # На телефоне диалог по умолчанию довольно узкий; поля с
+            # контрагентом в нём сжимаются в одну колонку. Задаём ширину
+            # вручную, но не шире экрана.
+            inset_padding=ft.Padding.symmetric(horizontal=12, vertical=24),
+            content_padding=ft.Padding.symmetric(horizontal=16, vertical=12),
             title=ft.Row(
                 controls=[
                     ft.Icon(ft.Icons.INVENTORY_2_OUTLINED, color=GREEN),
                     ft.Text("Новая партия", weight=ft.FontWeight.BOLD),
                 ],
             ),
-            content=ft.Column(
-                tight=True, spacing=10, scroll=ft.ScrollMode.AUTO,
-                controls=[
-                    ft.Text("Основные данные", color=GREEN,
-                            weight=ft.FontWeight.BOLD),
-                    name, description,
-                    ft.Text("Контрагент", color=GREEN,
-                            weight=ft.FontWeight.BOLD),
-                    counterparty_select,
-                    counterparty_name, counterparty_phone,
-                    counterparty_email, counterparty_info,
-                    ft.OutlinedButton(
-                        "Сохранить контрагента",
-                        icon=ft.Icons.PERSON_ADD_ALT_1_OUTLINED,
-                        on_click=save_counterparty_click,
-                    ),
-                    counterparty_status,
-                ],
+            content=ft.Container(
+                width=min(
+                    520,
+                    max(240, (getattr(page, "width", 0) or 420) - 56),
+                ),
+                content=ft.Column(
+                    tight=True, spacing=10, scroll=ft.ScrollMode.AUTO,
+                    controls=[
+                        ft.Text("Основные данные", color=GREEN,
+                                weight=ft.FontWeight.BOLD),
+                        name, description,
+                        ft.Text("Контрагент", color=GREEN,
+                                weight=ft.FontWeight.BOLD),
+                        counterparty_select,
+                        counterparty_name, counterparty_phone,
+                        counterparty_email, counterparty_info,
+                        ft.OutlinedButton(
+                            "Сохранить контрагента",
+                            icon=ft.Icons.PERSON_ADD_ALT_1_OUTLINED,
+                            on_click=save_counterparty_click,
+                        ),
+                        counterparty_status,
+                    ],
+                ),
             ),
             actions=[
                 ft.TextButton("Отмена", on_click=lambda _: page.pop_dialog()),
@@ -1202,30 +1219,59 @@ menu_card(
                 ],
             ))
 
+        def is_mobile():
+            platform = getattr(page, "platform", None)
+            check = getattr(platform, "is_mobile", None)
+            return bool(check and check())
+
         def needs_download_dialog():
             """Web/mobile cannot open a server-side ``file://`` path.
 
             In those modes the PDF bytes must be handed to the client, which
             offers them as a regular browser/app download.
             """
-            if getattr(page, "web", False):
-                return True
-            platform = getattr(page, "platform", None)
-            is_mobile = getattr(platform, "is_mobile", None)
-            return bool(is_mobile and is_mobile())
+            return bool(getattr(page, "web", False)) or is_mobile()
+
+        def attach_service(service):
+            services = getattr(page, "services", None)
+            if services is not None and all(
+                existing is not service for existing in services
+            ):
+                services.append(service)
+            return service
+
+        async def share_file_bytes(data, file_name, mime_type, title):
+            """Open the Android/iOS share sheet with a generated file.
+
+            Saving through ``FilePicker.save_file`` only downloads the file;
+            on a phone users expect the system "Поделиться" dialog, from which
+            they can send the document to WhatsApp, mail or a drive.
+            """
+            service = share_service["value"]
+            if service is None:
+                service = ft.Share()
+                share_service["value"] = service
+            attach_service(service)
+            try:
+                await service.share_files(
+                    [ft.ShareFile.from_bytes(
+                        data, mime_type=mime_type, name=file_name,
+                    )],
+                    title=title,
+                )
+            except Exception as exc:  # noqa: BLE001 - surface any platform error
+                page.show_dialog(ft.SnackBar(
+                    content=ft.Text(f"Не удалось поделиться файлом: {exc}"),
+                ))
 
         async def save_file_bytes(
             data, file_name, extension, dialog_title, success_text,
         ):
             picker = file_picker["value"]
-            services = getattr(page, "services", None)
             if picker is None:
                 picker = ft.FilePicker()
                 file_picker["value"] = picker
-            if services is not None and all(
-                existing is not picker for existing in services
-            ):
-                services.append(picker)
+            attach_service(picker)
             try:
                 await picker.save_file(
                     dialog_title=dialog_title,
@@ -1241,12 +1287,6 @@ menu_card(
                 return
             page.show_dialog(ft.SnackBar(content=ft.Text(success_text)))
 
-        async def download_pdf(pdf_bytes, file_name):
-            await save_file_bytes(
-                pdf_bytes, file_name, "pdf", "Сохранить точковку",
-                "PDF сохранён",
-            )
-
         async def download_excel(_):
             try:
                 data = build_calculation_xlsx(party_calculation_data(party))
@@ -1254,6 +1294,14 @@ menu_card(
                 page.show_dialog(ft.SnackBar(content=ft.Text(str(exc))))
                 return
             file_name = f"расчет_{party['id']}.xlsx"
+            if is_mobile():
+                await share_file_bytes(
+                    data, file_name,
+                    "application/vnd.openxmlformats-officedocument"
+                    ".spreadsheetml.sheet",
+                    "Расчёт Excel",
+                )
+                return
             if needs_download_dialog():
                 await save_file_bytes(
                     data, file_name, "xlsx", "Сохранить расчёт",
@@ -1275,13 +1323,22 @@ menu_card(
         async def export_pdf(_):
             if needs_download_dialog():
                 # Keep nothing on the server: render in memory and let the
-                # client save the bytes to its own downloads folder.
+                # client share or save the bytes itself.
                 try:
                     pdf_bytes = create_party_pdf_bytes(party)
                 except RuntimeError as exc:
                     page.show_dialog(ft.SnackBar(content=ft.Text(str(exc))))
                     return
-                await download_pdf(pdf_bytes, f"точковка_{party['id']}.pdf")
+                file_name = f"точковка_{party['id']}.pdf"
+                if is_mobile():
+                    await share_file_bytes(
+                        pdf_bytes, file_name, "application/pdf", "Точковка",
+                    )
+                    return
+                await save_file_bytes(
+                    pdf_bytes, file_name, "pdf", "Сохранить точковку",
+                    "PDF сохранён",
+                )
                 return
 
             try:
@@ -2465,7 +2522,7 @@ menu_card(
                             vertical_alignment=ft.CrossAxisAlignment.CENTER,
                             controls=[
                                 ft.Container(
-                                    width=58, height=54, border_radius=10,
+                                    width=48, height=54, border_radius=10,
                                     bgcolor="#F5F6F6", alignment=ft.Alignment.CENTER,
                                     content=ft.Text(
                                         f"Ø{item['diameter']}", size=18,
@@ -2473,17 +2530,19 @@ menu_card(
                                         no_wrap=True,
                                     ),
                                 ),
-                                ft.Row(
-                                    spacing=5, expand=True,
-                                    vertical_alignment=ft.CrossAxisAlignment.CENTER,
+                                ft.Column(
+                                    spacing=1, expand=True,
                                     controls=[
                                         ft.Text(
                                             f"{format_length(item['length'])} м",
                                             size=13, color=TEXT, no_wrap=True,
+                                            overflow=ft.TextOverflow.ELLIPSIS,
                                         ),
-                                        ft.Text("·", size=13, color=TEXT),
-                                        ft.Text(f"{item['quantity']} шт.", size=13,
-                                                color=TEXT, no_wrap=True),
+                                        ft.Text(
+                                            f"{item['quantity']} шт.", size=13,
+                                            color=TEXT, no_wrap=True,
+                                            overflow=ft.TextOverflow.ELLIPSIS,
+                                        ),
                                     ],
                                 ),
                                 ft.Column(
@@ -3365,12 +3424,12 @@ menu_card(
                     if key in unit_modes else default_unit
                 )
                 unit_control = ft.Text(
-                    unit_label, size=14, color="#171A18", width=38
+                    unit_label, size=14, color="#171A18", width=60, text_align=ft.TextAlign.CENTER,
                 )
                 unit_texts[key] = unit_control
                 row = ft.Container(
-                    height=54,
-                    padding=ft.Padding.symmetric(horizontal=4, vertical=0),
+                    height=40,
+                    padding=ft.Padding.symmetric(horizontal=2, vertical=0),
                     border=ft.Border.all(1, "#E1E3E2"),
                     border_radius=9, bgcolor="#FFFFFF",
                     on_click=lambda e, k=key: select_field(k),
