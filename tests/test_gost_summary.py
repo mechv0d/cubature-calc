@@ -678,7 +678,11 @@ def test_settings_single_range_and_counterparty_are_used_for_saving(
     )
     assert name_field.value.startswith("Кругляк ")
     date_part = name_field.value.removeprefix("Кругляк ")
-    assert len(date_part.split(".")) == 2
+    # День и месяц, например «26.11». На Android старый вариант с «%-d»
+    # подставлял в название партии литерал «-d».
+    day_part, month_part = date_part.split(".")
+    assert day_part.isdigit() and len(day_part) <= 2
+    assert month_part.isdigit() and len(month_part) == 2
     next(
         control for control in walk(party_dialog)
         if isinstance(control, ft.FilledButton)

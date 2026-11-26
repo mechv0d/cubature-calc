@@ -1,3 +1,4 @@
+import os
 from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from pathlib import Path
@@ -79,7 +80,14 @@ VERSION_FILE = Path(__file__).resolve().parent / "app-version.txt"
 DEFAULT_VERSION = "0.1"
 
 #: Каталог статических файлов (передаётся в ``ft.run`` как ``assets_dir``).
-ASSETS_DIR = Path(__file__).resolve().parent / "app" / "assets"
+#:
+#: В собранном приложении (APK/desktop) файлы лежат в каталоге, путь к которому
+#: Flet передаёт в переменной окружения ``FLET_ASSETS_DIR``, поэтому путь
+#: берём оттуда, а для локального запуска — от ``main.py``.
+ASSETS_DIR = Path(
+    os.environ.get("FLET_ASSETS_DIR")
+    or Path(__file__).resolve().parent / "assets"
+)
 
 
 def asset_url(src):
@@ -463,7 +471,10 @@ def main(page: ft.Page):
         )
 
     def party_date():
-        return datetime.now().strftime("%-d.%m") if __import__("os").name != "nt" else datetime.now().strftime("%#d.%m")
+        # ``%-d``/``%#d`` (день без ведущего нуля) поддерживаются не везде:
+        # на Android strftime оставлял в названии партии литерал «-d».
+        now = datetime.now()
+        return f"{now.day}.{now.month:02d}"
 
     def create_party(
         party_type, default_name, payload,
@@ -3580,4 +3591,4 @@ menu_card(
 
 
 if __name__ == "__main__":
-    ft.run(main, assets_dir="app/assets")
+    ft.run(main, assets_dir="assets")

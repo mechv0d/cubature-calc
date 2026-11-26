@@ -483,10 +483,11 @@ def show_cylindering(
             ))
             return
         if create_party:
+            now = datetime.now()
             create_party(
                 "Оцилиндровка",
                 f"ОЦБ #{calculation_number} "
-                f"({datetime.now().strftime('%#d.%m')})",
+                f"({now.day}.{now.month:02d})",
                 party_payload(),
                 preset_counterparty=settings["counterparty"] or None,
                 preset_description=(

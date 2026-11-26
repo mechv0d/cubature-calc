@@ -2,7 +2,8 @@
 
 Метаданные статей хранятся отдельными JSON-файлами в каталоге
 ``app/content/guide`` (по одному ``<slug>.json`` на статью), тексты —
-Markdown-файлы рядом.  Картинки лежат в ``app/assets/guide`` и подключаются
+Markdown-файлы рядом.  Картинки лежат в ``assets/guide`` (рядом с ``main.py``,
+каталог передаётся в ``ft.run`` как ``assets_dir``) и подключаются
 в тексте как ``guide/<файл>.png``.
 
 Чтобы добавить статью, достаточно:
@@ -19,7 +20,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CONTENT_DIR = Path(__file__).resolve().parent / "guide"
-ASSET_ROOT = Path(__file__).resolve().parent.parent / "assets" / "guide"
+#: ``app/content/guide.py`` → корень проекта → ``assets/guide``.
+ASSET_ROOT = Path(__file__).resolve().parent.parent.parent / "assets" / "guide"
 
 #: Каталог картинок внутри ``assets_dir``.
 ASSET_DIR = "guide"

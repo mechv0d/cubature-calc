@@ -10,7 +10,8 @@ org = "com.example"
 product = "Кубатура Экспресс"
 company = "Sergei Rem"
 copyright = "Copyright mechv0d (C) 2026"
-icon = "app/assets/app-icon-512.png"
+# Иконку Flet ищет в каталоге assets как ``icon.png`` (или ``icon.svg``);
+# ключ ``icon`` в pyproject.toml эта версия Flet не читает.
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
