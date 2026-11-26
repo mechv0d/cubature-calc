@@ -69,25 +69,35 @@ def setup_haptic(page):
         services.append(service)
 
 
-async def _play_haptic(service, method):
-    # Try the requested method first, then the tick used by older Flet code:
-    # some Android builds ignore one of them, but not both.
-    for name in (method, "selection_click"):
+async def _play_haptic(service, methods):
+    # ``heavy_impact`` + ``vibrate`` is roughly twice as strong as the single
+    # tick that was used before. Some Android builds silently ignore one of the
+    # methods, so try each in turn and keep going until one works.
+    if isinstance(methods, str):
+        methods = (methods,)
+    played = False
+    for name in methods:
         try:
             await getattr(service, name)()
-            return
+            played = True
         except Exception:
             logger.warning(
                 "Could not play haptic feedback (%s)", name, exc_info=True
             )
+    if not played:
+        # Older Flet builds / devices may only support the selection tick.
+        try:
+            await service.selection_click()
+        except Exception:
+            logger.warning("Could not play haptic feedback", exc_info=True)
 
 
-def vibrate(page, method="vibrate"):
-    """Play a short haptic feedback after adding a calculation item.
+def vibrate(page, methods=("heavy_impact", "vibrate")):
+    """Play a strong haptic feedback after adding a calculation item.
 
-    ``vibrate`` is the most reliable method across Android devices: the
-    ``selection_click`` tick is silently ignored on many phones (and when
-    "touch feedback" is disabled), while an explicit vibration is felt.
+    Two pulses (a heavy impact followed by a vibration) are about twice as
+    strong as the previous single ``selection_click`` tick, which many phones
+    ignored completely or played too softly to notice.
     """
     service = _haptics.get(id(page))
     if service is None:
@@ -101,7 +111,7 @@ def vibrate(page, method="vibrate"):
     if run_task is None:
         return
     try:
-        run_task(_play_haptic, service, method)
+        run_task(_play_haptic, service, methods)
     except Exception:
         logger.warning("Could not schedule haptic feedback", exc_info=True)
 

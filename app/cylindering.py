@@ -29,7 +29,7 @@ BG = "#F7F8F7"
 PANEL = "#E8E9EA"
 TEXT = "#62666A"
 
-DIAMETERS = list(range(3, 101))
+DIAMETERS = list(range(3, 121))
 ROUNDING_OPTIONS = ("0.0", "0.00", "0.000", "0.0000", "0.00000", "0.000000")
 
 

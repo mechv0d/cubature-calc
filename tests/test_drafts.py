@@ -85,4 +85,5 @@ def test_vibrate_attaches_service_and_uses_real_vibration(monkeypatch):
     assert isinstance(page.services[0], ft.HapticFeedback)
     assert len(page.tasks) == 1
     _, args = page.tasks[0]
-    assert args == (page.services[0], "vibrate")
+    # Two pulses make the feedback roughly twice as strong as before.
+    assert args == (page.services[0], ("heavy_impact", "vibrate"))

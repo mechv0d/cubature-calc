@@ -188,3 +188,29 @@ def test_tapping_lumber_quantity_focuses_the_field(tmp_path, monkeypatch):
         if isinstance(control, ft.Text)
     ]
     assert "7 шт." in texts
+
+
+def test_rounding_selector_shows_digit_counts(tmp_path, monkeypatch):
+    monkeypatch.setattr(storage, "DB_PATH", tmp_path / "test.sqlite3")
+    page = FakePage()
+    main(page)
+    open_lumber_screen(page)
+
+    selector = next(
+        control for control in all_controls(page)
+        if isinstance(control, ft.Dropdown) and control.label == "Округление"
+    )
+    # The user sees digit counts, not raw "0.0000" strings.
+    assert [option.text for option in selector.options] == [
+        "1 зн.", "2 зн.", "3 зн.", "4 зн. (рек.)", "5 зн.", "6 зн.",
+    ]
+    # The default is four digits, and the key still drives the precision.
+    assert selector.value == "0.0000"
+
+    selector.value = "0.000000"
+    selector.on_select(SimpleNamespace(control=selector))
+    selector = next(
+        control for control in all_controls(page)
+        if isinstance(control, ft.Dropdown) and control.label == "Округление"
+    )
+    assert selector.value == "0.000000"

@@ -65,9 +65,17 @@ GUIDE_BORDER = "#E8E2D4"
 GUIDE_INK = "#1B211C"
 GUIDE_MUTED = "#6C736C"
 GUIDE_HERO_HEIGHT = 320
-DIAMETERS = list(range(3, 101))
+DIAMETERS = list(range(3, 121))
 UNIT_NAMES = {"MM": "мм", "CM": "см", "M": "м"}
-ROUNDING_OPTIONS = ("0.0", "0.00", "0.000", "0.0000", "0.00000", "0.000000")
+#: Варианты округления для пиломатериалов: (значение, подпись в списке).
+#: Значение остаётся строкой вида «0.0000» — из него берётся число знаков.
+ROUNDING_OPTIONS = tuple(
+    (
+        "0." + "0" * digits,
+        f"{digits} зн." + (" (рек.)" if digits == 4 else ""),
+    )
+    for digits in range(1, 7)
+)
 
 #: Размер картинки (квадрат, px) в карточке партии на экране «Партии».
 #: Увеличьте это число, если иконки должны быть крупнее.
@@ -1119,10 +1127,10 @@ menu_card(
             bgcolor="#F4F0E1",
             content=ft.Row(expand=True, controls=[
                 table_cell("Позиция", expand=True, size=12),
-                table_cell("Длина, м", width=60, size=12),
+                table_cell("Длина, м", width=52, size=12),
                 table_cell("Шт", width=28, size=12),
-                table_cell("Объём, м³", width=68, size=12),
-                table_cell("Сумма, ₽", width=62, size=12),
+                table_cell("Объём, м³", width=58, size=12),
+                table_cell("Сумма, ₽", width=56, size=12),
             ]),
         )
         data_rows = [ft.Container(
@@ -1130,9 +1138,9 @@ menu_card(
             border=ft.Border(bottom=ft.BorderSide(1, "#D5D9D8")),
             content=ft.Row(expand=True, controls=[
                 table_cell(position, expand=True, weight=ft.FontWeight.W_600),
-                table_cell(length, width=50),
+                table_cell(length, width=32),
                 table_cell(quantity, width=28),
-                table_cell(f"{volume}", width=64, size=12, color=ORANGE,
+                table_cell(f"{volume}", width=58, size=12, color=ORANGE,
                            weight=ft.FontWeight.BOLD),
                 table_cell(cost_text, width=62, size=12, color="#1B211C",
                            weight=ft.FontWeight.W_600),
@@ -1153,7 +1161,7 @@ menu_card(
                         table_cell(str(count), width=28,
                                    weight=ft.FontWeight.BOLD),
                         table_cell(
-                            f"{total:.{volume_digits}f}", width=64,
+                            f"{total:.{volume_digits}f}", width=58,
                             size=12, color=ORANGE, weight=ft.FontWeight.BOLD,
                         ),
                         table_cell(
@@ -1395,7 +1403,7 @@ menu_card(
                                  ft.Column(spacing=0, expand=True, controls=[
                                      ft.Text("ОБЪЁМ ПАРТИИ", color="#80651F",
                                              weight=ft.FontWeight.BOLD),
-                                     ft.Text(f"{total:.{volume_digits}f} м³", size=26,
+                                     ft.Text(f"{total:.{volume_digits}f} м³", size=22,
                                              color=ORANGE, weight=ft.FontWeight.BOLD),
                                      ft.Text(f"{count} шт.", size=15, color=TEXT),
                                  ]),
@@ -1411,14 +1419,14 @@ menu_card(
                                          ft.Text(
                                              f"{total_cost_text} ₽" if has_cost
                                              else "—",
-                                             size=24,
+                                             size=22,
                                              color="#1B211C",
                                              weight=ft.FontWeight.BOLD,
                                              text_align=ft.TextAlign.RIGHT,
                                          ),
                                          ft.Text(
                                              f"Цена 1 м³: {price_hint}",
-                                             size=13, color=TEXT,
+                                             size=12, color=TEXT,
                                              text_align=ft.TextAlign.RIGHT,
                                          ),
                                      ],
@@ -2549,7 +2557,7 @@ menu_card(
                                     spacing=0,
                                     horizontal_alignment=ft.CrossAxisAlignment.END,
                                     controls=[
-                                        ft.Text(f"{item['display_volume']} м³",
+                                        ft.Text(f"{item['display_volume']}",
                                                 size=16, color=ORANGE,
                                                 weight=ft.FontWeight.BOLD,
                                                 no_wrap=True),
@@ -2948,9 +2956,9 @@ menu_card(
             ],
         )
 
-        summary_volume = ft.Text("0.0000 м³", size=28, color=ORANGE,
+        summary_volume = ft.Text("0.0000 м³", size=24, color=ORANGE,
                                   weight=ft.FontWeight.BOLD)
-        summary_details = ft.Text("0 шт. · 0.00 RUB.", size=16, color=TEXT)
+        summary_details = ft.Text("0 шт. 0.00 RUB.", size=14, color=TEXT)
         records = ft.Column(spacing=8, scroll=ft.ScrollMode.AUTO, expand=True)
         price_currency = "RUB."
 
@@ -2989,11 +2997,14 @@ menu_card(
 
         rounding_selector = ft.Dropdown(
             label="Округление",
-            value="0." + "0" * rounding_digits["value"],
-            width=140,
+            value=ROUNDING_OPTIONS[rounding_digits["value"] - 1][0],
+            width=110,
             dense=True,
-            text_size=15,
-            options=[ft.dropdown.Option(option) for option in ROUNDING_OPTIONS],
+            text_size=14,
+            options=[
+                ft.DropdownOption(key=value, text=text)
+                for value, text in ROUNDING_OPTIONS
+            ],
             on_select=change_rounding,
         )
 
