@@ -7,6 +7,8 @@ from app.screen_utils import (
     keep_screen_awake,
     load_screen_state,
     save_screen_state,
+    setup_haptic,
+    vibrate,
 )
 from app.storage import save_calculation
 
@@ -18,6 +20,16 @@ TEXT = "#62666A"
 
 DIAMETERS = list(range(4, 101))
 ROUNDING_OPTIONS = ("0.0", "0.00", "0.000", "0.0000", "0.00000", "0.000000")
+
+
+def diameter_grid_columns(page):
+    """Return 2 columns on phones and never more than 4 columns."""
+    width = getattr(page, "width", 0) or 0
+    if width >= 1000:
+        return 4
+    if width >= 700:
+        return 3
+    return 2
 
 
 def cylinder_volume(diameter_cm: int, length_m: float, quantity: int = 1) -> float:
@@ -32,10 +44,11 @@ def round_volume(value, digits: int) -> Decimal:
     return Decimal(str(value)).quantize(quantum, rounding=ROUND_HALF_UP)
 
 
-def show_cylindering(page: ft.Page, show_home):
+def show_cylindering(page: ft.Page, show_home, create_party=None):
     """Отдельный экран расчёта оцилиндрованных брёвен."""
 
     keep_screen_awake(page)
+    setup_haptic(page)
 
     # Restore the draft saved on the previous run (app/phone restart).
     draft = load_screen_state("cylindering")
@@ -59,6 +72,7 @@ def show_cylindering(page: ft.Page, show_home):
         })
 
     page.controls.clear()
+    page.navigation_bar = None
     page.appbar = ft.AppBar(
         leading=ft.IconButton(
             ft.Icons.ARROW_BACK,
@@ -279,7 +293,7 @@ def show_cylindering(page: ft.Page, show_home):
             button.style = ft.ButtonStyle(
                 bgcolor=GREEN if selected else "#E5E6E7",
                 color="white" if selected else TEXT,
-                shape=ft.RoundedRectangleBorder(radius=5),
+                shape=ft.RoundedRectangleBorder(radius=0),
                 padding=ft.Padding.symmetric(horizontal=2, vertical=4),
             )
 
@@ -295,6 +309,7 @@ def show_cylindering(page: ft.Page, show_home):
                 "quantity": 1,
             })
         refresh_records()
+        vibrate(page)
 
     def change_rounding(e):
         value = e.control.value
@@ -397,6 +412,17 @@ def show_cylindering(page: ft.Page, show_home):
                 content=ft.Text("Сначала добавьте хотя бы одно бревно.")
             ))
             return
+        if create_party:
+            create_party("Оцилиндровка", "ОЦБ " + __import__("datetime").datetime.now().strftime("%#d.%m"), [
+                {
+                    "diameter_cm": item["diameter"],
+                    "length_m": item["length"],
+                    "quantity": item["quantity"],
+                    "volume_m3": float(item_volume(item)),
+                }
+                for item in items
+            ])
+            return
         save_calculation("Оцилиндровка", [
             {
                 "diameter_cm": item["diameter"],
@@ -412,10 +438,10 @@ def show_cylindering(page: ft.Page, show_home):
 
     diameter_grid = ft.GridView(
         expand=True,
-        runs_count=2,
+        runs_count=diameter_grid_columns(page),
         spacing=5,
         run_spacing=5,
-        child_aspect_ratio=1.0,
+        child_aspect_ratio=1.08,
         controls=[],
     )
 
@@ -423,12 +449,12 @@ def show_cylindering(page: ft.Page, show_home):
         button = ft.FilledButton(
             content=ft.Text(str(diameter), size=22,
                             weight=ft.FontWeight.W_600),
-            height=58,
+            height=72,
             style=ft.ButtonStyle(
                 bgcolor="#E5E6E7",
                 color=TEXT,
                 padding=ft.Padding.symmetric(horizontal=2, vertical=4),
-                shape=ft.RoundedRectangleBorder(radius=5),
+                shape=ft.RoundedRectangleBorder(radius=0),
                 elevation=0,
             ),
             on_click=lambda e, d=diameter: add_diameter(d),
@@ -474,13 +500,19 @@ def show_cylindering(page: ft.Page, show_home):
         "Таблица",
         expand=True,
         on_click=lambda _: choose_tab("table"),
-        style=ft.ButtonStyle(bgcolor=GREEN, color="white"),
+        style=ft.ButtonStyle(
+            bgcolor=GREEN, color="white",
+            shape=ft.RoundedRectangleBorder(radius=0),
+        ),
     )
     summary_tab = ft.TextButton(
         "Итоги",
         expand=True,
         on_click=lambda _: choose_tab("summary"),
-        style=ft.ButtonStyle(bgcolor=GREEN, color="#B8D4C8"),
+        style=ft.ButtonStyle(
+            bgcolor=GREEN, color="#B8D4C8",
+            shape=ft.RoundedRectangleBorder(radius=0),
+        ),
     )
 
     length_button = ft.FilledButton(

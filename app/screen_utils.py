@@ -15,12 +15,13 @@ import sqlite3
 
 import flet as ft
 
-from app.storage import load_draft, save_draft
+from app.storage import clear_draft, load_draft, save_draft
 
 logger = logging.getLogger(__name__)
 
-# Keep a strong reference per page so the service is not garbage collected.
+# Keep a strong reference per page so the services are not garbage collected.
 _wakelocks = {}
+_haptics = {}
 
 _STORAGE_ERRORS = (sqlite3.Error, OSError, TypeError, ValueError)
 
@@ -40,6 +41,53 @@ def save_screen_state(screen, state):
         save_draft(screen, state)
     except _STORAGE_ERRORS:
         logger.warning("Could not save draft %r", screen, exc_info=True)
+
+
+def clear_screen_state(screen):
+    """Remove a saved draft after its calculation has been saved as a party."""
+    try:
+        clear_draft(screen)
+    except _STORAGE_ERRORS:
+        logger.warning("Could not clear draft %r", screen, exc_info=True)
+
+
+def setup_haptic(page):
+    """Register a haptic feedback service for the page.
+
+    Call this once when a calculation screen is built, before ``page.update()``.
+    """
+    services = getattr(page, "services", None)
+    if services is None:
+        # Test/dummy pages and platforms without service support.
+        return
+
+    service = _haptics.get(id(page))
+    if service is None:
+        service = ft.HapticFeedback()
+        _haptics[id(page)] = service
+    if all(existing is not service for existing in services):
+        services.append(service)
+
+
+async def _play_haptic(service, method):
+    try:
+        await getattr(service, method)()
+    except Exception:
+        logger.warning("Could not play haptic feedback", exc_info=True)
+
+
+def vibrate(page, method="selection_click"):
+    """Play a short haptic feedback after adding a calculation item."""
+    service = _haptics.get(id(page))
+    if service is None:
+        return
+    run_task = getattr(page, "run_task", None)
+    if run_task is None:
+        return
+    try:
+        run_task(_play_haptic, service, method)
+    except Exception:
+        logger.warning("Could not schedule haptic feedback", exc_info=True)
 
 
 async def _enable_wakelock(service):

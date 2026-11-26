@@ -60,6 +60,18 @@ def init_db():
                 updated_at TEXT NOT NULL
             )
         """)
+        db.execute("""
+            CREATE TABLE IF NOT EXISTS parties (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                type TEXT NOT NULL,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL DEFAULT '',
+                counterparty TEXT NOT NULL DEFAULT '{}',
+                payload TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
 
 
 def save_calculation(name, items):
@@ -116,3 +128,65 @@ def load_draft(screen):
 def clear_draft(screen):
     with connect() as db:
         db.execute("DELETE FROM drafts WHERE screen = ?", (screen,))
+
+
+def save_party(party_type, name, description, counterparty, payload):
+    """Create a party and return its id."""
+    now = datetime.now().isoformat(timespec="seconds")
+    with connect() as db:
+        cursor = db.execute(
+            """INSERT INTO parties
+               (type, name, description, counterparty, payload, created_at, updated_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (
+                party_type, name, description[:500],
+                json.dumps(counterparty, ensure_ascii=False),
+                json.dumps(payload, ensure_ascii=False, cls=DecimalJSONEncoder),
+                now, now,
+            ),
+        )
+        return cursor.lastrowid
+
+
+def list_parties():
+    with connect() as db:
+        rows = db.execute(
+            """SELECT id, type, name, description, counterparty, payload,
+                      created_at, updated_at
+               FROM parties ORDER BY updated_at DESC, id DESC"""
+        ).fetchall()
+    result = []
+    for row in rows:
+        party_id, party_type, name, description, counterparty, payload, created, updated = row
+        try:
+            counterparty = json.loads(counterparty)
+            payload = restore_decimals(json.loads(payload))
+        except (json.JSONDecodeError, TypeError):
+            counterparty, payload = {}, []
+        result.append({
+            "id": party_id, "type": party_type, "name": name,
+            "description": description, "counterparty": counterparty,
+            "payload": payload, "created_at": created, "updated_at": updated,
+        })
+    return result
+
+
+def delete_party(party_id):
+    with connect() as db:
+        db.execute("DELETE FROM parties WHERE id = ?", (party_id,))
+
+
+def update_party(party_id, name, description, counterparty, payload):
+    """Update an existing party and its last-modified timestamp."""
+    now = datetime.now().isoformat(timespec="seconds")
+    with connect() as db:
+        db.execute(
+            """UPDATE parties SET name = ?, description = ?, counterparty = ?,
+                      payload = ?, updated_at = ? WHERE id = ?""",
+            (
+                name.strip(), description[:500],
+                json.dumps(counterparty, ensure_ascii=False),
+                json.dumps(payload, ensure_ascii=False, cls=DecimalJSONEncoder),
+                now, party_id,
+            ),
+        )

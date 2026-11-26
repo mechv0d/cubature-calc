@@ -19,6 +19,7 @@ dist/
 # Runtime data
 *.sqlite3
 *.db
+*.pdf
 
 # Editors / OS
 .vscode/

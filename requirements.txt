@@ -1,2 +1,3 @@
 flet==0.86.0
 fastapi<0.145
+reportlab>=4.0

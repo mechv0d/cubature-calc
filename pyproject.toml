@@ -3,13 +3,14 @@ name = "cubature-calculator"
 version = "0.1.0"
 description = "Offline timber volume calculator"
 requires-python = ">=3.13,<3.14"
-dependencies = ["flet==0.86.0"]
+dependencies = ["flet==0.86.0", "reportlab>=4.0"]
 
 [tool.flet]
 org = "com.example"
 product = "Кубатура Экспресс"
 company = "Sergei Rem"
 copyright = "Copyright mechv0d (C) 2026"
+icon = "app/assets/app-icon-512.png"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

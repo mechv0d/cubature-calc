@@ -1,16 +1,24 @@
+from datetime import datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 import flet as ft
 
 from app.calculators.gost_2708 import calculate_gost_item, load_gost_table
 from app.cylindering import show_cylindering
+from app.pdf_export import create_party_pdf
 from app.screen_utils import (
+    clear_screen_state,
     allow_screen_sleep,
     keep_screen_awake,
     load_screen_state,
     save_screen_state,
+    setup_haptic,
+    vibrate,
 )
-from app.storage import init_db, list_calculations
+from app.storage import (
+    delete_party, init_db, list_calculations, list_parties, save_party,
+    update_party,
+)
 
 GREEN = "#176B4A"
 ORANGE = "#E89A4E"
@@ -23,10 +31,25 @@ ROUNDING_OPTIONS = ("0.0", "0.00", "0.000", "0.0000", "0.00000", "0.000000")
 GOST_TABLE = load_gost_table()
 
 
+def diameter_grid_columns(page):
+    """Return 2 columns on phones and never more than 4 columns."""
+    width = getattr(page, "width", 0) or 0
+    if width >= 1000:
+        return 4
+    if width >= 700:
+        return 3
+    return 2
+
+
 def main(page: ft.Page):
     init_db()
     page.title = "Кубатура Экспресс"
     page.theme_mode = ft.ThemeMode.LIGHT
+    page.fonts = {
+        "Google Sans": "Google_Sans/static/GoogleSans-Regular.ttf",
+    }
+    page.theme = ft.Theme(font_family="Google Sans")
+    page.dark_theme = ft.Theme(font_family="Google Sans")
     page.bgcolor = BG
     page.padding = 0
     page.window_min_width = 360
@@ -50,9 +73,106 @@ def main(page: ft.Page):
             ),
         )
 
+    def bottom_navigation(selected_index):
+        """Навигация разделов, отображаемая только на основных экранах."""
+        return ft.NavigationBar(
+            selected_index=selected_index,
+            on_change=lambda e: (
+                show_home() if e.control.selected_index == 0
+                else show_parties() if e.control.selected_index == 1
+                else show_reference()
+            ),
+            destinations=[
+                ft.NavigationBarDestination(
+                    icon=ft.Icons.CALCULATE_OUTLINED,
+                    selected_icon=ft.Icons.CALCULATE,
+                    label="Расчёт",
+                ),
+                ft.NavigationBarDestination(
+                    icon=ft.Icons.INVENTORY_2_OUTLINED,
+                    selected_icon=ft.Icons.INVENTORY_2,
+                    label="Партии",
+                ),
+                ft.NavigationBarDestination(
+                    icon=ft.Icons.MENU_BOOK_OUTLINED,
+                    selected_icon=ft.Icons.MENU_BOOK,
+                    label="Справочник",
+                ),
+            ],
+        )
+
+    def party_date():
+        return datetime.now().strftime("%-d.%m") if __import__("os").name != "nt" else datetime.now().strftime("%#d.%m")
+
+    def create_party(party_type, default_name, payload):
+        name = ft.TextField(label="Название", value=default_name)
+        description = ft.TextField(label="Описание", multiline=True, max_length=500)
+        counterparty_name = ft.TextField(label="Контрагент")
+        counterparty_phone = ft.TextField(label="Телефон", keyboard_type=ft.KeyboardType.PHONE)
+        counterparty_email = ft.TextField(label="Email", keyboard_type=ft.KeyboardType.EMAIL)
+        counterparty_info = ft.TextField(label="Дополнительная информация")
+
+        def save(_):
+            if not name.value.strip():
+                name.error_text = "Укажите название"
+                page.update()
+                return
+            party_id = save_party(
+                party_type, name.value.strip(), description.value or "",
+                {
+                    "name": counterparty_name.value or "",
+                    "phone": counterparty_phone.value or "",
+                    "email": counterparty_email.value or "",
+                    "info": counterparty_info.value or "",
+                }, payload,
+            )
+            draft_screen = {
+                "ГОСТ": "gost",
+                "Пиломатериал": "lumber",
+                "Оцилиндровка": "cylindering",
+            }.get(party_type)
+            if draft_screen:
+                clear_screen_state(draft_screen)
+            page.pop_dialog()
+            saved_party = next(
+                party for party in list_parties() if party["id"] == party_id
+            )
+            show_party_detail(saved_party)
+
+        dialog = ft.AlertDialog(
+            modal=True,
+            title=ft.Row(
+                controls=[
+                    ft.Icon(ft.Icons.INVENTORY_2_OUTLINED, color=GREEN),
+                    ft.Text("Новая партия", weight=ft.FontWeight.BOLD),
+                ],
+            ),
+            content=ft.Column(
+                tight=True, spacing=10, scroll=ft.ScrollMode.AUTO,
+                controls=[
+                    ft.Text("Основные данные", color=GREEN,
+                            weight=ft.FontWeight.BOLD),
+                    name, description,
+                    ft.Text("Контрагент", color=GREEN,
+                            weight=ft.FontWeight.BOLD),
+                    counterparty_name, counterparty_phone,
+                    counterparty_email, counterparty_info,
+                ],
+            ),
+            actions=[
+                ft.TextButton("Отмена", on_click=lambda _: page.pop_dialog()),
+                ft.FilledButton(
+                    "Сохранить", on_click=save,
+                    style=ft.ButtonStyle(bgcolor=GREEN, color="white"),
+                ),
+            ],
+        )
+        page.show_dialog(dialog)
+
     def show_home():
         allow_screen_sleep(page)
         page.controls.clear()
+        page.navigation_bar = bottom_navigation(0)
         page.appbar = ft.AppBar(
             title=ft.Text("Кубатура Экспресс", weight=ft.FontWeight.W_600),
             bgcolor=GREEN,
@@ -70,7 +190,7 @@ def main(page: ft.Page):
                             border_radius=20,
                             bgcolor="#E5F0E9",
                             content=ft.Text(
-                                "Автономный режим · данные хранятся на устройстве",
+                                "Автономный режим, данные хранятся на устройстве",
                                 color="#3E5549",
                                 size=15,
                             ),
@@ -89,7 +209,7 @@ def main(page: ft.Page):
 menu_card(
     "Оцилиндровка",
     "Расчёт объёма оцилиндрованных брёвен",
-    lambda _: show_cylindering(page, show_home),
+                            lambda _: show_cylindering(page, show_home, create_party),
 ),
                         ft.OutlinedButton(
                             "История расчётов",
@@ -102,8 +222,346 @@ menu_card(
         )
         page.update()
 
+    def show_parties():
+        allow_screen_sleep(page)
+        page.controls.clear()
+        page.navigation_bar = bottom_navigation(1)
+        page.appbar = ft.AppBar(
+            title=ft.Text("Партии", weight=ft.FontWeight.W_600),
+            bgcolor=GREEN,
+            color="white",
+            center_title=True,
+        )
+        cards = ft.Column(spacing=10, scroll=ft.ScrollMode.AUTO, expand=True)
+
+        def refresh():
+            cards.controls.clear()
+            parties = list_parties()
+            if not parties:
+                cards.controls.append(ft.Text("Сохранённых партий пока нет.", color=TEXT))
+            for party in parties:
+                cards.controls.append(ft.Card(
+                    elevation=0,
+                    bgcolor="#FFFFFF",
+                    content=ft.ListTile(
+                        leading=ft.Image(
+                            src=(
+                                "pilomaterial.png"
+                                if party["type"] == "Пиломатериал"
+                                else "cylinder.png"
+                                if party["type"] == "Оцилиндровка"
+                                else "krugl.png"
+                            ),
+                            width=58, height=58,
+                            # Flet 0.86 accepts the fit mode as a string;
+                            # ImageFit enum is not available in this version.
+                            fit="contain",
+                        ),
+                        title=ft.Text(party["name"], weight=ft.FontWeight.W_600),
+                        subtitle=ft.Text(
+                            f"{format_party_datetime(party['updated_at'])}"
+                            f"{"\n" + party['description'] or ''}"
+                        ),
+                        trailing=ft.IconButton(
+                            ft.Icons.DELETE_OUTLINE,
+                            tooltip="Удалить партию",
+                            on_click=lambda e, i=party["id"], n=party["name"]: confirm_delete_party(i, n),
+                        ),
+                        on_click=lambda e, p=party: show_party_detail(p),
+                    ),
+                ))
+            page.update()
+
+        page.add(ft.Container(padding=18, expand=True, content=cards))
+        refresh()
+        page.update()
+
+    def confirm_delete_party(party_id, party_name, after_delete=None):
+        def delete(_):
+            page.pop_dialog()
+            delete_party(party_id)
+            if after_delete:
+                after_delete()
+            else:
+                show_parties()
+
+        page.show_dialog(ft.AlertDialog(
+            modal=True,
+            title=ft.Text("Удалить партию?"),
+            content=ft.Text(
+                f'Партия «{party_name}» будет удалена без возможности восстановления.'
+            ),
+            actions=[
+                ft.TextButton("Отмена", on_click=lambda _: page.pop_dialog()),
+                ft.TextButton("Удалить", on_click=delete),
+            ],
+        ))
+
+    def party_totals(party):
+        total = Decimal(0)
+        count = 0
+        for item in party.get("payload", []):
+            try:
+                total += Decimal(str(item.get("volume_m3", item.get("volume", 0))))
+                count += int(item.get("quantity", 0))
+            except (TypeError, ValueError, InvalidOperation):
+                continue
+        return total, count
+
+    def show_party_detail(party):
+        """Экран конкретной партии; нижняя навигация здесь намеренно скрыта."""
+        page.controls.clear()
+        page.navigation_bar = None
+        total, count = party_totals(party)
+        counterparty = party.get("counterparty") or {}
+        table_rows = []
+        for item in party.get("payload", []):
+            if party["type"] == "Пиломатериал":
+                title = f"{item.get('thickness_cm', 0):g}×{item.get('width_cm', 0):g}"
+                position = f"Пиломатериал {title}"
+                length = f"{item.get('length_m', item.get('length', 0)):g}"
+            else:
+                title = f"{item.get('diameter_cm', item.get('diameter', 0))} см"
+                position = title
+                length = f"{item.get('length_m', item.get('length', 0)):g}"
+            volume = item.get('volume_m3', item.get('volume', 0))
+            quantity = item.get('quantity', 0)
+            table_rows.append((position, length, quantity, volume))
+
+        def table_cell(value, width=None, expand=False, **kwargs):
+            return ft.Container(
+                content=ft.Text(str(value), **kwargs), width=width,
+                expand=expand, padding=ft.Padding.symmetric(horizontal=10, vertical=12),
+            )
+
+        header = ft.Container(
+            bgcolor="#F4F0E1",
+            content=ft.Row(expand=True, controls=[
+                table_cell("Позиция", expand=True),
+                table_cell("Длина, м", width=80),
+                table_cell("Шт", width=44),
+                table_cell("Объём, м³", width=92),
+            ]),
+        )
+        data_rows = [ft.Container(
+            bgcolor="#FFFFFF",
+            border=ft.Border(bottom=ft.BorderSide(1, "#D5D9D8")),
+            content=ft.Row(expand=True, controls=[
+                table_cell(position, expand=True, weight=ft.FontWeight.W_600),
+                table_cell(length, width=74),
+                table_cell(quantity, width=44),
+                table_cell(f"{volume} м³", width=92, color=ORANGE,
+                           weight=ft.FontWeight.BOLD),
+            ]),
+        ) for position, length, quantity, volume in table_rows]
+        composition_table = ft.Container(
+            bgcolor="#FFFFFF", border=ft.Border.all(1, "#E4E8E4"),
+            border_radius=14, clip_behavior=ft.ClipBehavior.ANTI_ALIAS,
+            content=ft.Column(controls=[
+                header,
+                *data_rows,
+                ft.Container(
+                    bgcolor="#FFF3CC", padding=ft.Padding.symmetric(vertical=12, horizontal=10),
+                    content=ft.Row(expand=True, controls=[
+                        ft.Text("Итого", weight=ft.FontWeight.BOLD, expand=True),
+                        ft.Container(width=44, content=ft.Text(str(count), weight=ft.FontWeight.BOLD)),
+                        ft.Text(f"{total:.4f} м³", width=92, color=ORANGE,
+                                weight=ft.FontWeight.BOLD),
+                    ]),
+                ),
+            ]),
+        )
+
+        def edit_party(_):
+            open_party_editor(party)
+
+        def delete_current(_):
+            confirm_delete_party(party["id"], party["name"])
+
+        def show_counterparty(_):
+            if not any(counterparty.values()):
+                content = ft.Text("Для этой партии контрагент не указан.")
+            else:
+                content = ft.Column(tight=True, spacing=8, controls=[
+                    ft.Text(counterparty.get("name") or "Без имени",
+                            size=20, weight=ft.FontWeight.BOLD),
+                    ft.Text(f"Телефон: {counterparty.get('phone') or 'не указан'}"),
+                    ft.Text(f"Email: {counterparty.get('email') or 'не указан'}"),
+                    ft.Text(f"Дополнительная информация: {counterparty.get('info') or 'не указана'}"),
+                ])
+
+            def edit(_):
+                page.pop_dialog()
+                open_party_editor(party)
+
+            page.show_dialog(ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Контрагент"),
+                content=content,
+                actions=[
+                    ft.TextButton("Закрыть", on_click=lambda _: page.pop_dialog()),
+                    ft.FilledButton("Изменить", on_click=edit,
+                                    style=ft.ButtonStyle(bgcolor=GREEN, color="white")),
+                ],
+            ))
+
+        def export_pdf(_):
+            try:
+                pdf_path = create_party_pdf(party)
+            except RuntimeError as exc:
+                page.show_dialog(ft.SnackBar(content=ft.Text(str(exc))))
+                return
+
+            def open_pdf(_):
+                page.pop_dialog()
+                page.launch_url(pdf_path.as_uri())
+
+            def share_pdf(_):
+                page.pop_dialog()
+                page.show_dialog(ft.SnackBar(
+                    content=ft.Text(f"Файл сохранён: {pdf_path.name}. "
+                                    "Его можно отправить из папки приложения."),
+                ))
+
+            page.show_dialog(ft.AlertDialog(
+                modal=True,
+                title=ft.Text("Точковка сохранена"),
+                content=ft.Text(f"Файл сохранён на устройстве:\n{pdf_path}"),
+                actions=[
+                    ft.TextButton("Закрыть", on_click=lambda _: page.pop_dialog()),
+                    ft.TextButton("Поделиться", on_click=share_pdf),
+                    ft.FilledButton("Открыть", on_click=open_pdf,
+                                    style=ft.ButtonStyle(bgcolor=GREEN, color="white")),
+                ],
+            ))
+
+        page.appbar = ft.AppBar(
+            leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda _: show_parties()),
+            title=ft.Text(party["name"], size=18), bgcolor=GREEN, color="white",
+            actions=[
+                ft.IconButton(ft.Icons.EDIT_OUTLINED, on_click=edit_party),
+                ft.IconButton(ft.Icons.DELETE_OUTLINE, tooltip="Удалить партию",
+                              on_click=delete_current),
+            ],
+        )
+        page.add(ft.Container(
+            bgcolor="#FFFFFF", expand=True, padding=ft.Padding.all(16),
+            content=ft.Column(expand=True, scroll=ft.ScrollMode.AUTO, spacing=12, controls=[
+                ft.Text(party["name"], size=24, weight=ft.FontWeight.BOLD),
+                ft.Text(f"Изменено: {format_party_datetime(party['updated_at'])}", color=TEXT),
+                 ft.TextButton(
+                     "Контрагент: " + (counterparty.get("name") or "не указан"),
+                     icon=ft.Icons.PERSON_OUTLINE,
+                     on_click=show_counterparty,
+                     style=ft.ButtonStyle(color=GREEN),
+                 ),
+                 ft.Container(bgcolor="#FFFFFF", padding=16, border_radius=14,
+                              border=ft.Border.all(2, "#E3B64F"),
+                              content=ft.Row(controls=[
+                                 ft.Column(spacing=0, controls=[
+                                     ft.Text("ОБЪЁМ ПАРТИИ", color="#80651F",
+                                             weight=ft.FontWeight.BOLD),
+                                     ft.Text(f"{total:.4f} м³", size=30,
+                                             color=ORANGE, weight=ft.FontWeight.BOLD),
+                                 ], expand=True),
+                                 ft.Text(f"{count} шт.", size=20, color=TEXT),
+                             ])),
+                  ft.Row(expand=True, spacing=8, controls=[
+                      ft.FilledButton("Точковка PDF", icon=ft.Icons.PICTURE_AS_PDF,
+                                      expand=True, height=64, on_click=export_pdf,
+                                      style=ft.ButtonStyle(
+                                          bgcolor="#FFF4BE", color="#171A18",
+                                          padding=ft.Padding.symmetric(horizontal=4, vertical=4),
+                                          shape=ft.RoundedRectangleBorder(radius=12),
+                                      )),
+                      ft.FilledButton("Удалить", icon=ft.Icons.DELETE_OUTLINE,
+                                      expand=True, height=64,
+                                      on_click=delete_current,
+                                      style=ft.ButtonStyle(
+                                          bgcolor="#F8C8C5", color="#171A18",
+                                          padding=ft.Padding.symmetric(horizontal=4, vertical=4),
+                                          shape=ft.RoundedRectangleBorder(radius=12),
+                                      )),
+                      ft.FilledButton("Изменить расчеты", icon=ft.Icons.EDIT,
+                                      expand=True, height=64,
+                                      on_click=lambda _: page.show_dialog(ft.SnackBar(
+                                          content=ft.Text("Добавление позиций будет доступно в следующем обновлении."))),
+                                      style=ft.ButtonStyle(
+                                          bgcolor="#C7DDF4", color="#171A18",
+                                          padding=ft.Padding.symmetric(horizontal=4, vertical=4),
+                                          shape=ft.RoundedRectangleBorder(radius=12),
+                                      )),
+                  ]),
+                 ft.Text(party.get("description") or "Без описания", color=TEXT),
+                 ft.Text("Состав партии", size=19, weight=ft.FontWeight.BOLD),
+                 composition_table,
+            ]),
+        ))
+        page.update()
+
+    def open_party_editor(party):
+        name = ft.TextField(label="Название", value=party["name"])
+        description = ft.TextField(label="Описание", value=party["description"],
+                                   multiline=True, max_length=500)
+        cp = party.get("counterparty") or {}
+        cp_name = ft.TextField(label="Контрагент", value=cp.get("name", ""))
+        cp_phone = ft.TextField(label="Телефон", value=cp.get("phone", ""))
+        cp_email = ft.TextField(label="Email", value=cp.get("email", ""))
+        cp_info = ft.TextField(label="Дополнительная информация", value=cp.get("info", ""))
+
+        def update(_):
+            update_party(
+                party["id"], name.value, description.value or "", {
+                    "name": cp_name.value or "", "phone": cp_phone.value or "",
+                    "email": cp_email.value or "", "info": cp_info.value or "",
+                }, party["payload"],
+            )
+            page.pop_dialog()
+            refreshed = next(p for p in list_parties() if p["id"] == party["id"])
+            show_party_detail(refreshed)
+
+        page.show_dialog(ft.AlertDialog(
+            modal=True, title=ft.Text("Изменить партию"),
+            content=ft.Column(tight=True, scroll=ft.ScrollMode.AUTO,
+                              controls=[name, description, cp_name, cp_phone, cp_email, cp_info]),
+            actions=[ft.TextButton("Отмена", on_click=lambda _: page.pop_dialog()),
+                     ft.FilledButton("Сохранить", on_click=update,
+                                     style=ft.ButtonStyle(bgcolor=GREEN, color="white"))],
+        ))
+
+    def format_party_datetime(value):
+        try:
+            months = ("января", "февраля", "марта", "апреля", "мая", "июня",
+                      "июля", "августа", "сентября", "октября", "ноября", "декабря")
+            value = datetime.fromisoformat(value)
+            return f"{value.day} {months[value.month - 1]} {value.year}, {value:%H:%M}"
+        except (TypeError, ValueError):
+            return value
+
+    def show_reference():
+        allow_screen_sleep(page)
+        page.controls.clear()
+        page.navigation_bar = bottom_navigation(2)
+        page.appbar = ft.AppBar(
+            title=ft.Text("Справочник"),
+            bgcolor=GREEN,
+            color="white",
+        )
+        page.add(
+            ft.Container(
+                padding=24,
+                content=ft.Text(
+                    "Справочная информация о приложении будет добавлена здесь.",
+                    size=16,
+                    color=TEXT,
+                ),
+            )
+        )
+        page.update()
+
     def show_placeholder(title):
         page.controls.clear()
+        page.navigation_bar = None
         page.appbar = ft.AppBar(
             leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda _: show_home()),
             title=ft.Text(title),
@@ -124,7 +582,9 @@ menu_card(
 
     def show_gost_calculator():
         keep_screen_awake(page)
+        setup_haptic(page)
         page.controls.clear()
+        page.navigation_bar = None
         active_tab["value"] = "table"
         page.appbar = ft.AppBar(
             leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda _: show_home()),
@@ -217,6 +677,7 @@ menu_card(
             count = sum(item["quantity"] for item in current_items)
             summary_view.controls.extend([
                 ft.Text("Итоги расчёта", size=22, weight=ft.FontWeight.BOLD),
+                ft.Text("Чтобы сохранить расчёт в партию, нажмите соответствующую кнопку внизу экрана", size=14),
                 ft.Row(controls=[
                     ft.Text("Количество брёвен", size=16),
                     ft.Container(expand=True),
@@ -355,6 +816,15 @@ menu_card(
                 "display_volume": format_gost_volume(volume),
             })
             refresh_items()
+            vibrate(page)
+
+        def save_gost_party(_):
+            if not current_items:
+                page.show_dialog(ft.SnackBar(content=ft.Text("Сначала добавьте хотя бы одно бревно.")))
+                return
+            create_party("ГОСТ", "Кругляк " + party_date(), [
+                {**item, "volume": str(item["volume"])} for item in current_items
+            ])
 
         def choose_tab(tab_name):
             active_tab["value"] = tab_name
@@ -421,17 +891,17 @@ menu_card(
             ))
 
         diameter_grid = ft.GridView(
-            expand=True, runs_count=2, spacing=5, run_spacing=5,
-            child_aspect_ratio=1.0,
+            expand=True, runs_count=diameter_grid_columns(page), spacing=5, run_spacing=5,
+            child_aspect_ratio=1.08,
             controls=[
                 ft.FilledButton(
                     content=ft.Text(str(d), size=22, no_wrap=True,
                                     text_align=ft.TextAlign.CENTER),
-                    height=58,
+                    height=72,
                     style=ft.ButtonStyle(
                         bgcolor="#E5E6E7", color=TEXT,
                         padding=ft.Padding.symmetric(horizontal=2, vertical=4),
-                        shape=ft.RoundedRectangleBorder(radius=5), elevation=0,
+                        shape=ft.RoundedRectangleBorder(radius=0), elevation=0,
                     ),
                     on_click=lambda e, n=d: add_diameter(n),
                 )
@@ -451,11 +921,17 @@ menu_card(
 
         table_tab = ft.TextButton(
             "Таблица", expand=True, on_click=lambda _: choose_tab("table"),
-            style=ft.ButtonStyle(color="white", bgcolor=GREEN),
+            style=ft.ButtonStyle(
+                color="white", bgcolor=GREEN,
+                shape=ft.RoundedRectangleBorder(radius=0),
+            ),
         )
         summary_tab = ft.TextButton(
             "Итоги", expand=True, on_click=lambda _: choose_tab("summary"),
-            style=ft.ButtonStyle(color="#B8D4C8", bgcolor=GREEN),
+            style=ft.ButtonStyle(
+                color="#B8D4C8", bgcolor=GREEN,
+                shape=ft.RoundedRectangleBorder(radius=0),
+            ),
         )
         length_button = ft.FilledButton(
             content=ft.Row(tight=True, controls=[
@@ -489,8 +965,8 @@ menu_card(
                                 ft.Text("Сохранить", color="white",
                                         weight=ft.FontWeight.BOLD),
                             ]),
-                            expand=True, disabled=True,
-                            style=ft.ButtonStyle(bgcolor="#AEB5B1", color="#E7E9E8"),
+                            expand=True, on_click=save_gost_party,
+                            style=ft.ButtonStyle(bgcolor=GREEN, color="white"),
                         ),
                         length_button,
                     ], spacing=7),
@@ -512,7 +988,9 @@ menu_card(
 
     def show_lumber_calculator():
         keep_screen_awake(page)
+        setup_haptic(page)
         page.controls.clear()
+        page.navigation_bar = None
         page.appbar = ft.AppBar(
             leading=ft.IconButton(ft.Icons.ARROW_BACK, on_click=lambda _: show_home()),
             title=ft.Text("Расчёт #1\n(ПИЛОМАТЕРИАЛЫ)", size=18),
@@ -594,6 +1072,15 @@ menu_card(
             summary_details.value = (
                 f"{total_count} шт. · {fmt(total_price, 2)} {price_currency}"
             )
+
+        def save_lumber_party(_):
+            if not lumber_items:
+                page.show_dialog(ft.SnackBar(content=ft.Text("Сначала добавьте хотя бы одну позицию.")))
+                return
+            create_party("Пиломатериал", "Пиломатериал " + party_date(), [
+                {**item, "volume_m3": str(rounded_volume(item))}
+                for item in lumber_items
+            ])
 
         def confirm_clear_records():
             def clear(_):
@@ -1073,6 +1560,8 @@ menu_card(
                     lumber_items[index] = dict(data)
                 page.pop_dialog()
                 refresh_records()
+                if index is None:
+                    vibrate(page)
 
             editor_content = ft.Column(
                 tight=True, scroll=ft.ScrollMode.AUTO, spacing=3,
@@ -1141,24 +1630,24 @@ menu_card(
                 ft.Container(
                     padding=ft.Padding.symmetric(horizontal=12, vertical=10),
                     bgcolor=BG,
-                    content=ft.FilledButton(
-                        content=ft.Row(
-                            alignment=ft.MainAxisAlignment.CENTER,
-                            controls=[
+                    content=ft.Row(expand=True, controls=[
+                        ft.FilledButton(
+                            content=ft.Row(tight=True, controls=[
+                                ft.Icon(ft.Icons.SAVE, color="white"),
+                                ft.Text("Сохранить", color="white", weight=ft.FontWeight.BOLD),
+                            ]),
+                            expand=True, height=56, on_click=save_lumber_party,
+                            style=ft.ButtonStyle(bgcolor=GREEN, color="white"),
+                        ),
+                        ft.FilledButton(
+                            content=ft.Row(tight=True, controls=[
                                 ft.Icon(ft.Icons.ADD, color="white"),
-                                ft.Text(
-                                    "Добавить пиломатериал", color="white",
-                                    weight=ft.FontWeight.BOLD, size=17,
-                                ),
-                            ],
+                                ft.Text("Добавить", color="white", weight=ft.FontWeight.BOLD),
+                            ]),
+                            expand=True, height=56, on_click=add_lumber,
+                            style=ft.ButtonStyle(bgcolor="#E77C3B", color="white"),
                         ),
-                        expand=True, height=62,
-                        style=ft.ButtonStyle(
-                            bgcolor="#E77C3B", color="white",
-                            shape=ft.RoundedRectangleBorder(radius=18),
-                        ),
-                        on_click=add_lumber,
-                    ),
+                    ]),
                 ),
             ],
         ))
@@ -1191,4 +1680,4 @@ menu_card(
 
 
 if __name__ == "__main__":
-    ft.app(target=main)
+    ft.app(target=main, assets_dir="app/assets")
