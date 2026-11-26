@@ -1126,11 +1126,11 @@ menu_card(
         header = ft.Container(
             bgcolor="#F4F0E1",
             content=ft.Row(expand=True, controls=[
-                table_cell("Позиция", expand=True, size=12),
-                table_cell("Длина, м", width=52, size=12),
-                table_cell("Шт", width=28, size=12),
-                table_cell("Объём, м³", width=58, size=12),
-                table_cell("Сумма, ₽", width=56, size=12),
+                table_cell("Позиция", expand=True, size=10, weight=ft.FontWeight.W_600),
+                table_cell("Длина, м", width=32, size=10, weight=ft.FontWeight.W_600),
+                table_cell("Шт", expand=True, size=10, weight=ft.FontWeight.W_600),
+                table_cell("Объём, м³", expand=True, size=10, weight=ft.FontWeight.W_600),
+                table_cell("Сумма, ₽", expand=True, size=10, weight=ft.FontWeight.W_600),
             ]),
         )
         data_rows = [ft.Container(
@@ -1139,11 +1139,9 @@ menu_card(
             content=ft.Row(expand=True, controls=[
                 table_cell(position, expand=True, weight=ft.FontWeight.W_600),
                 table_cell(length, width=32),
-                table_cell(quantity, width=28),
-                table_cell(f"{volume}", width=58, size=12, color=ORANGE,
-                           weight=ft.FontWeight.BOLD),
-                table_cell(cost_text, width=62, size=12, color="#1B211C",
-                           weight=ft.FontWeight.W_600),
+                table_cell(quantity, expand=True),
+                table_cell(f"{volume}", expand=True, size=12, color=ORANGE),
+                table_cell(cost_text, expand=True, size=12, color="#1B211C"),
             ]),
         ) for position, length, quantity, volume, cost_text in table_rows]
         composition_table = ft.Container(
@@ -1155,17 +1153,15 @@ menu_card(
                 ft.Container(
                     bgcolor="#FFF3CC",
                     content=ft.Row(expand=True, controls=[
-                        table_cell("Итого", expand=True,
-                                   weight=ft.FontWeight.BOLD),
-                        table_cell("", width=50),
-                        table_cell(str(count), width=28,
-                                   weight=ft.FontWeight.BOLD),
+                        table_cell("Итого", expand=True),
+                        table_cell("", width=32),
+                        table_cell(str(count), expand=True, weight=ft.FontWeight.BOLD),
                         table_cell(
-                            f"{total:.{volume_digits}f}", width=58,
+                            f"{total:.{volume_digits}f}", expand=True,
                             size=12, color=ORANGE, weight=ft.FontWeight.BOLD,
                         ),
                         table_cell(
-                            total_cost_text, width=62,
+                            total_cost_text, expand=True,
                             size=12, color="#1B211C", weight=ft.FontWeight.BOLD,
                         ),
                     ]),
@@ -3424,6 +3420,7 @@ menu_card(
                     border=ft.InputBorder.NONE, text_size=16,
                     text_align=ft.TextAlign.START, expand=True,
                     bgcolor="#FFFFFF",
+                    height=50,
                     on_focus=lambda e, k=key: focus_field(k),
                     on_change=lambda e, k=key: change_field(
                         k, e.control.value
@@ -3439,8 +3436,8 @@ menu_card(
                 )
                 unit_texts[key] = unit_control
                 row = ft.Container(
-                    height=40,
-                    padding=ft.Padding.symmetric(horizontal=2, vertical=0),
+                    height=50,
+                    padding=ft.Padding.symmetric(horizontal=2, vertical=4),
                     border=ft.Border.all(1, "#E1E3E2"),
                     border_radius=9, bgcolor="#FFFFFF",
                     on_click=lambda e, k=key: select_field(k),
